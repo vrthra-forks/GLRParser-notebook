@@ -110,10 +110,9 @@ class GSS:
 
 
 class SPPFNode:
-    def __init__(self, label, start_position=None, end_position=None):
-        self.label = label
+    def __init__(self, label, start_position=None):
+        self.label = label #list of lable
         self.start_position = start_position
-        self.end_postion = end_position
         self.children = []
         self.root_candidate = True
 
@@ -200,12 +199,12 @@ def build_epsilon_sppf(grammar):
     """
     nullable = compute_nullable_parts(grammar)
     epsilon_sppf = {}
-    epsilon_sppf[0] = SPPFNode("ε")
+    epsilon_sppf[0] = SPPFNode(("ε"))
     node_counter = 1  # Unique counter for keys
 
     # Step 1: Create epsilon-SPPF trees for nullable non-terminals
     for nt in nullable:
-        node = SPPFNode(nt)
+        node = SPPFNode(tuple(nt))
         node.add_child(epsilon_sppf[0])
         epsilon_sppf[node_counter] = node
         node_counter += 1
@@ -233,13 +232,13 @@ def build_epsilon_sppf(grammar):
 
                             existed = False
                             for node in epsilon_sppf.values():
-                                if ''.join(suffix_key) == node.label:
+                                if suffix_key == node.label:
                                     existed = True
                                     break
 
                             if not existed:
                                 # Build an \(\epsilon\)-SPPF tree for this suffix
-                                root = SPPFNode(''.join(suffix_key))
+                                root = SPPFNode((suffix_key))
                                 for part in nullable_suffix:
                                     root.add_child(epsilon_sppf[nullable_key_map[part]])
                                 epsilon_sppf[node_counter] = root
@@ -253,19 +252,19 @@ def build_epsilon_sppf(grammar):
 
                             existed = False
                             for node in epsilon_sppf.values():
-                                if ''.join(suffix_key) == node.label:
+                                if suffix_key == node.label:
                                     existed = True
                                     break
 
                             if not existed:
                                 # Build an \(\epsilon\)-SPPF tree for this suffix
                                 nullable |= set(suffix_key)
-                                root = SPPFNode(''.join(suffix_key))
+                                root = SPPFNode((suffix_key))
                                 nullable_key_map[nt] = count_map
                                 count_map += 1
 
                                 for node in epsilon_sppf.values():
-                                    if ''.join(nullable_suffix) == node.label:       
+                                    if nullable_suffix == list(node.label):       
                                         root.add_child(node)
 
                                 epsilon_sppf[node_counter] = root
@@ -281,14 +280,14 @@ def function_I(epsilon_sppf, A, alpha, nullable_string):
     if len(alpha) == 0:
         for key in epsilon_sppf.keys():
             node = epsilon_sppf[key]
-            if A == node.label:
+            if list(A) == list(node.label):
                 return key
     else:
         if len(nullable_string) == 0:
             return 0
         for key in epsilon_sppf.keys():
             node = epsilon_sppf[key]
-            if ''.join(nullable_string) == node.label:
+            if list(nullable_string) == list(node.label):
                 return key
 
 
@@ -677,7 +676,8 @@ class RNParseTableConstructer:
                     dot_ind = rhs.index(self.dot)
                     for key in self.epsilon_sppf.keys():
                         node = self.epsilon_sppf[key]
-                        if ''.join(rhs[dot_ind+1:]) == node.label:
+                        # print(rhs[dot_ind+1:], list(node.label))
+                        if rhs[dot_ind+1:] == list(node.label):
                             copy_rhs = copy.copy(rhs)
                             copy_rhs.remove(self.dot)
 
@@ -769,11 +769,10 @@ class RNGLRParser():
         self.accept_state = accept_state
 
         self.gss = GSS()
-        self.sppf = {}
+        self.sppf = []
         self.sppf_root = None
 
         self.U = {}
-        self.reverse_U = {}
         self.R = {}
         self.Q = []
         self.N = []
@@ -817,7 +816,6 @@ class RNGLRParser():
                 self.U[i] = []
                 self.R[i] = []
             self.U[0] = [v0]
-            self.reverse_U[v0.count] = 0
             self.Q = []
             self.a = input_string + ["$"]
 
@@ -845,13 +843,14 @@ class RNGLRParser():
             for u in self.U[n]:
                 if u.state == self.accept_state:
                     # print("\n")
-                    # print(self.start, v0.state)   
+                    # print(self.start, v0.state)
 
-                    # for node in self.sppf.values():
-                    #     # print(node.label, node.start_position)
-                    #     if node.label == (self.start.strip("\'")) and node.start_position == v0.state:
-                    #         if node.root_candidate:
-                    self.sppf_root = self.sppf.get((self.start.strip("\'"), v0.state))
+                    for node in self.sppf:
+                        # print(node.label, node.start_position)
+                        if node.label == (self.start.strip("\'")) and node.start_position == v0.state:
+                            if node.root_candidate:
+                                self.sppf_root = node
+
 
                     self.result = True
 
@@ -967,12 +966,14 @@ class RNGLRParser():
                 # for node in self.epsilon_sppf.values():
                 #     print(node.label, node.start_position)       
 
+                for node in self.N:
+                    if node.label == (X) and node.start_position == c:
+                        z = node
+                        z_exists = True
 
-                z = self.sppf.get((X, c))
-
-                if not z:
+                if not z_exists:
                     z = SPPFNode(X, c)
-                    self.sppf[(X, c)] = z
+                    self.sppf.append(z)    
                     self.N.append(z)
 
             # if m == 0:
@@ -995,7 +996,6 @@ class RNGLRParser():
                 w = self.gss.create_node(l)
                 # if m == 0:
                 self.U[i].append(w)
-                self.reverse_U[w.count] = i
                 # else:
                 #     self.U[i+1].append(w)
                 w.add_link(u, z)
@@ -1026,12 +1026,15 @@ class RNGLRParser():
     def shifter(self, i):
         Q_prime = []
 
+        z_exists = False
+        for node in self.sppf:
+            if node.label == (self.a[i]) and self.start == i:
+                z = node
+                z_exists = True
 
-        z = self.sppf.get((self.a[i], i))
-
-        if not z:
-            z = SPPFNode(self.a[i], i)
-            self.sppf[(self.a[i], i)] = z
+        if not z_exists:
+            z = SPPFNode([self.a[i]], i)
+            self.sppf.append(z)
 
         while self.Q:
             v, k = self.Q.pop()
@@ -1055,8 +1058,6 @@ class RNGLRParser():
                 w = self.gss.create_node(k)
                 w.add_link(v, z)
                 self.U[i+1].append(w)
-                self.reverse_U[w.count] = i+1
-
 
                 operations = self.parse_table[k][self.symbols.index(self.a[i+1])]
                 for operation in operations:
@@ -1088,8 +1089,8 @@ class RNGLRParser():
                     y.add_child(v)
                     v.root_candidate = False
 
-                if not self.sppf.get((v.label, v.start_position)):
-                    self.sppf[(v.label, v.start_position)] = v
+                if v not in self.sppf:
+                    self.sppf.append(v)
 
         elif not y.check_exist_children_sequence(A):
             if not any(isinstance(child, PackingNode) for child in y.children):
@@ -1108,8 +1109,8 @@ class RNGLRParser():
                 t.add_edge(v)
                 v.root_candidate = False
 
-                if not self.sppf.get((v.label, v.start_position)):
-                    self.sppf[(v.label, v.start_position)] = v
+                # if v not in self.sppf:
+                self.sppf.append(v)
 
 
     def find_node_in_U_i_with_label(self, i, l):
@@ -1124,18 +1125,18 @@ class RNGLRParser():
         return False
     
     def find_U_i_with_node(self, node):
-        return self.reverse_U[node.count]
-        # for i in self.U.keys():
-        #     if node in self.U[i]:
-        #         return i
+        for i in self.U.keys():
+            if node in self.U[i]:
+                return i
             
     def add_node_to_sppf(self, new_node):
-        node = self.sppf.get((new_node.label, new_node.start_position))
-        if not node:
-            self.sppf[new_node.label, new_node.start_position] = new_node
+        for node in self.sppf:
+            if new_node.label == node.label and new_node.start_position == node.start_position:
+                return node
+        else:
+            self.sppf.append(new_node)
             for child in new_node.children:
                 self.add_node_to_sppf(child)
-        return node
             
 
     
@@ -1159,29 +1160,13 @@ class RNGLRParser():
 #     "F": [["(", "E", ")"], ["id"]]
 # }
 # start = "E"
-
-# grammar = {
-#     "<E>": [
-#             ["<E>", "+", "<T>"],       # Rule 1: E → E + T
-#             ["<T>"]                  # Rule 2: E → T
-#             ],        
-#     "<T>": [
-#             ["<T>", "*", "<F>"],       # Rule 3: T → T * F
-#             ["<F>"]                  # Rule 4: T → F
-#             ],           
-#     "<F>": [
-#             ["(", "<E>", ")"],       # Rule 5: F → ( E )
-#             ["a"]                  # Rule 6: F → a
-#             ]
-# }
-
-# start = "<E>"
 # # Test the Parser
 # t = RNParseTableConstructer(grammar, start)
 # parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
 
 
-# input_string = []
+# print(t.epsilon_sppf)
+# input_string = ["id", "+", "id", "*", "id"]
 # parser.parse(input_string)
 
 # parser.visualize_sppf(filename="my_parse_tree")
@@ -1189,122 +1174,122 @@ class RNGLRParser():
 
 
 
-# import simplefuzzer as fuzzer
+import simplefuzzer as fuzzer
 
-# def parents(g):
-#     parent = {}
-#     for k in g:
-#         for r in g[k]:
-#             for t in r:
-#                 if t not in g: continue
-#                 if t not in parent: parent[t] = set()
-#                 parent[t].add(k)
-#     return parent
-
-
-# def _k_paths(g, k, parent):
-#     if k == 1: return [[k] for k in g]
-#     _k_1_paths = _k_paths(g, k-1, parent)
-#     # attach parents to each of the _k_1_paths.
-#     new_paths = []
-#     for path in _k_1_paths:
-#         if path[0] not in parent: continue
-#         for p in parent[path[0]]:
-#             new_paths.append([p] + path)
-#     return new_paths
+def parents(g):
+    parent = {}
+    for k in g:
+        for r in g[k]:
+            for t in r:
+                if t not in g: continue
+                if t not in parent: parent[t] = set()
+                parent[t].add(k)
+    return parent
 
 
-# def k_paths(g, k):
-#     g_parents = parents(g)
-#     return _k_paths(g, k, g_parents)
+def _k_paths(g, k, parent):
+    if k == 1: return [[k] for k in g]
+    _k_1_paths = _k_paths(g, k-1, parent)
+    # attach parents to each of the _k_1_paths.
+    new_paths = []
+    for path in _k_1_paths:
+        if path[0] not in parent: continue
+        for p in parent[path[0]]:
+            new_paths.append([p] + path)
+    return new_paths
 
 
-# def find_rule_containing_key(g, key, root):
-#     leaf = root[0]
-#     for rule in g[key]:
-#         r = []
-#         while rule:
-#             token, *rule = rule
-#             if leaf != token:
-#                 r.append((token, None))
-#             else:
-#                 return r + [root] + [(t, None) for t in rule]
-#     assert False
+def k_paths(g, k):
+    g_parents = parents(g)
+    return _k_paths(g, k, g_parents)
 
 
-# def path_to_tree(path_, g):
-#     leaf, *path = reversed(path_)
-#     root = (leaf, [])
-#     # take the lowest
-#     while path:
-#         leaf, *path = path
-#         if not path: return root
-#         rule = find_rule_containing_key(g, leaf, root)
-#         root = [leaf, rule]
-
-# def tree_fill_(g, pt, f):
-#     key, children = pt
-#     if not children:
-#         if key in g:
-#             return (key, [(f.fuzz(key), [])])
-#         else:
-#             return (key, [])
-#     else:
-#         return (key, [tree_fill_(g, c, f) for c in children])
+def find_rule_containing_key(g, key, root):
+    leaf = root[0]
+    for rule in g[key]:
+        r = []
+        while rule:
+            token, *rule = rule
+            if leaf != token:
+                r.append((token, None))
+            else:
+                return r + [root] + [(t, None) for t in rule]
+    assert False
 
 
-# def tree_fill(g, pt):
-#     rgf = fuzzer.LimitFuzzer(g)
-#     return tree_fill_(g, pt, rgf)
+def path_to_tree(path_, g):
+    leaf, *path = reversed(path_)
+    root = (leaf, [])
+    # take the lowest
+    while path:
+        leaf, *path = path
+        if not path: return root
+        rule = find_rule_containing_key(g, leaf, root)
+        root = [leaf, rule]
+
+def tree_fill_(g, pt, f):
+    key, children = pt
+    if not children:
+        if key in g:
+            return (key, [(f.fuzz(key), [])])
+        else:
+            return (key, [])
+    else:
+        return (key, [tree_fill_(g, c, f) for c in children])
 
 
-# def collapse(t):
-#     key, children = t
-#     if not children:
-#         return key
-#     return ''.join([collapse(c) for c in children])
-
-# def display_tree(node, level=0, c='-'):
-#     key, children = node
-#     if children is None:
-#         print(' ' * 4 * level + c+'> ' + key)
-#     else:
-#         print(' ' * 4 * level + c+'> ' + key)
-#         for c in children:
-#             if isinstance(c, str):
-#                 print(' ' * 4 * (level+1) + c)
-#             else:
-#                 display_tree(c, level + 1, c='+')
+def tree_fill(g, pt):
+    rgf = fuzzer.LimitFuzzer(g)
+    return tree_fill_(g, pt, rgf)
 
 
-# # grammar = {
-# #     "<E>": [
-# #             ["<E>", "+", "<T>"],       # Rule 1: E → E + T
-# #             ["<T>"]                  # Rule 2: E → T
-# #             ],        
-# #     "<T>": [
-# #             ["<T>", "*", "<F>"],       # Rule 3: T → T * F
-# #             ["<F>"]                  # Rule 4: T → F
-# #             ],           
-# #     "<F>": [
-# #             ["(", "<E>", ")"],       # Rule 5: F → ( E )
-# #             ["a"]                  # Rule 6: F → a
-# #             ]
-# # }
+def collapse(t):
+    key, children = t
+    if not children:
+        return key
+    return ''.join([collapse(c) for c in children])
 
-# # start = "<E>"
+def display_tree(node, level=0, c='-'):
+    key, children = node
+    if children is None:
+        print(' ' * 4 * level + c+'> ' + key)
+    else:
+        print(' ' * 4 * level + c+'> ' + key)
+        for c in children:
+            if isinstance(c, str):
+                print(' ' * 4 * (level+1) + c)
+            else:
+                display_tree(c, level + 1, c='+')
 
-# # t = RNParseTableConstructer(grammar, start)
-# # parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
 
-# for path in k_paths(grammar, 20)[:10]:
-#     if path[0] in start: 
-#         tree = path_to_tree(path, grammar)
-#         for i in range(1):
-#             t = tree_fill(grammar, tree)
-#             s = collapse(t)
-#             print(s)
-#             parser.parse(list(s))
+grammar = {
+    "<E>": [
+            ["<E>", "+", "<T>"],       # Rule 1: E → E + T
+            ["<T>"]                  # Rule 2: E → T
+            ],        
+    "<T>": [
+            ["<T>", "*", "<F>"],       # Rule 3: T → T * F
+            ["<F>"]                  # Rule 4: T → F
+            ],           
+    "<F>": [
+            ["(", "<E>", ")"],       # Rule 5: F → ( E )
+            ["a"]                  # Rule 6: F → a
+            ]
+}
 
-# profiler.disable()
-# profiler.print_stats(sort="time")
+start = "<E>"
+
+t = RNParseTableConstructer(grammar, start)
+parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
+
+for path in k_paths(grammar, 5):
+    if path[0] in start: 
+        tree = path_to_tree(path, grammar)
+        for i in range(1):
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            parser.parse(list(s))
+
+profiler.disable()
+profiler.print_stats(sort="time")
