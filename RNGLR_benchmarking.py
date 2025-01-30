@@ -1,104 +1,120 @@
-import pandas as pd
-from final_parser.RNGLR import RNParseTableConstructer, RNGLRParser
+# import pandas as pd
+import final_parser.RNGLR as rnglr
 # from final_parser.LRs import add_start_state
 # from final_parser.LRs import LR0DFA, SLR1DFA, LR1DFA, LALR1DFA
 # from final_parser.LRs import LR0Parser, SLR1Parser, LR1Parser, LALR1Parser
-from final_parser.Earley import EarleyParser, LeoParser, EnhancedExtractor, tree_to_str
-from final_parser.CYK import CYKParser
-from final_parser.GLL import compile_grammar
+import final_parser.Earley as earley
+import final_parser.CYK as cyk
+import final_parser.GLL as gll
+import final_parser.Valiant as valiant
 
 import time
 import random
 import tracemalloc
 from collections import defaultdict
+import traceback
+
 
 
 
 def benchmark(parsers, grammar, start, test_cases):
-    results = []
-    for test_str, is_ambiguous in test_cases:
-        # test_str = "a"*length
-        row = {
-            'length': len(test_str),
-            'ambiguous': is_ambiguous,
-            'parsers': {}
-        }
+    results = {name: {'length': [], 'time': [], 'memory': []} for name in parsers}
+
+    for test_no, test_str in enumerate(test_cases):
         for name in parsers:
             if name == "GLL":
-                gll = compile_grammar(grammar)
+                gll_parser = gll.compile_grammar(grammar)
+            elif name == "Valiant":
+                valiant_parser = valiant.ValiantParser(grammar)
             elif name == "CYK":
-                cyk = CYKParser(grammar)
+                cyk_parser = cyk.CYKParser(grammar)
             elif name == "Earley":
-                earley = EarleyParser(grammar)
-            elif name == "Leo":
-                leo = LeoParser(grammar)
+                earley_parser = earley.EarleyParser(grammar)
             elif name == "RNGLR":
-                rntable = RNParseTableConstructer(grammar, start)
-                rnglr = RNGLRParser(rntable.grammar, rntable.non_terminals, rntable.terminals, rntable.start, rntable.parse_table, rntable.epsilon_sppf)
+                rntable = rnglr.RNParseTableConstructer(grammar, start)
+                rnglr_parser = rnglr.RNGLRParser(rntable.grammar, rntable.non_terminals, rntable.terminals, rntable.start, rntable.parse_table, rntable.epsilon_sppf)
             
             
+            try:
+                if name == "GLL":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-            if name == "GLL":
-                start_time = time.perf_counter()
-                tracemalloc.start()
-                gll_result = gll.parse_on(test_str, start)
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
-            elif name == "CYK":
-                start_time = time.perf_counter()
-                tracemalloc.start()
-                cyk_result = cyk.parse_on(test_str, start)
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
-            elif name == "Earley":
-                start_time = time.perf_counter()
-                tracemalloc.start()
-                earley_result = EnhancedExtractor(earley, test_str, start)
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
-            elif name == "Leo":
-                start_time = time.perf_counter()
-                tracemalloc.start()
-                leo_result = leo.parse_on(test_str, start)
-                print(leo_result)
-                for tree in leo_result:
-                    pass
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
-            elif name == "RNGLR":
-                import cProfile
-                profiler = cProfile.Profile()
-                profiler.enable()
-                start_time = time.perf_counter()
-                tracemalloc.start()
+                    gll_result = gll_parser.recognize_on(test_str, start)
+                    ee = gll.EnhancedExtractor(gll_result)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
 
-                rnglr_result = rnglr.parse(list(test_str))
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                elif name == "Valiant":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                profiler.disable()
-                profiler.print_stats(sort="time")
+                    v = valiant_parser.parse_on(test_str, start)
+                    for t in v:
+                        pass
+
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
+
+                elif name == "CYK":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
+
+                    cyk_result = cyk_parser.parse_on(test_str, start)
+                    for t in cyk_result:
+                        pass
+
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
+
+                elif name == "Earley":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
+
+                    ee = earley.EnhancedExtractor(earley_parser, test_str, start)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
+
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
+
+                elif name == "RNGLR":
+                    # import cProfile
+                    # profiler = cProfile.Profile()
+                    # profiler.enable()
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
+
+                    rnglr_root, res = rnglr_parser.parse(list(test_str))
+                    ee = rnglr.EnhancedExtractor(rnglr_root)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
+
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
+
+                    # profiler.disable()
+                    # profiler.print_stats(sort="time")
 
 
+                results[name]['length'].append(len(test_str))
+                results[name]['time'].append(parse_time)
+                results[name]['memory'].append(memory_peak)
+                
 
-            # parser.metrics.reset()
-            # success = parser.parse(test_str, start)
-            row['parsers'][name] = {
-                'time': parse_time,
-                'memory': memory_peak,
-                # 'edges': parser.metrics.edges,
-                # 'cells': parser.metrics.cells,
-                # 'nodes': parser.metrics.nodes,
-                # 'ambiguous_trees': parser.metrics.ambiguous_trees,
-                # 'success': success
-            }
-        results.append(row)
+            except Exception as e:
+                traceback.print_exc()
     return results
 
 # Example grammar
@@ -228,72 +244,49 @@ def display_tree(node, level=0, c='-'):
                 display_tree(c, level + 1, c='+')
 
 
-grammar = {
-    "<E>": [
-            ["<E>", "+", "<T>"],       # Rule 1: E → E + T
-            ["<T>"]                  # Rule 2: E → T
-            ],        
-    "<T>": [
-            ["<T>", "*", "<F>"],       # Rule 3: T → T * F
-            ["<F>"]                  # Rule 4: T → F
-            ],           
-    "<F>": [
-            ["(", "<E>", ")"],       # Rule 5: F → ( E )
-            ["a"]                  # Rule 6: F → a
-            ]
-}
-
-start = "<E>"
-
-test_cases = []
-for path in k_paths(grammar, 20)[:10]:
-    if path[0] in start: 
-        tree = path_to_tree(path, grammar)
-        for i in range(1):
-            t = tree_fill(grammar, tree)
-            s = collapse(t)
-
-            test_cases.append((s, True))
-        break
-
-
-
-parsers = {
-    # 'CYK',
-    'GLL',
-    # 'Earley',
-    # 'Leo',
-    'RNGLR'
-}
-
-results = benchmark(parsers, grammar, start, test_cases)
-
 
 import csv
 
-def print_results_table(results):
-    # Print header
-    # print("\n{:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10}".format(
-    #     "Length", "Ambiguous", "Parser", "Time(s)", "Memory(MB)", "Edges", "Cells", "Nodes", "Ambiguous\nTrees"))
-    # print("-" * 95)
-    print("\n{:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10}".format(
-        "Length", "Ambiguous", "Parser", "Time(s)", "Memory(MB)", "Edges", "Cells", "Nodes", "Ambiguous\nTrees"))
-    print("-" * 95)
+def print_grammar(grammar, start, property):
+    """
+    Prints the grammar rules in a human-readable format.
 
-    # Print rows
-    for row in results:
-        for parser_name, stats in row['parsers'].items():
-            print("{:<10} {:<10} {:<10} {:<10.4f} {:<10.2f}".format(
-                row['length'],
-                str(row['ambiguous']),
-                parser_name,
-                stats['time'],
-                stats['memory'] ,  # Convert bytes to MB
-                # stats.get('edges', 'N/A'),
-                # stats.get('cells', 'N/A'),
-                # stats.get('nodes', 'N/A'),
-                # stats['ambiguous_trees'])
-            ))
+    Args:
+        grammar (dict): Grammar rules in the given format.
+        start (str): The start symbol of the grammar.
+    """
+    print(f"\n{property}")
+    print(f"Start Symbol: {start}")
+    print("Grammar Rules:")
+    for non_terminal, productions in grammar.items():
+        # Join productions for the same non-terminal with " | "
+        production_strings = []
+        for production in productions:
+            if not production:  # Empty production
+                production_strings.append("ε")
+            else:
+                production_strings.append(" ".join(production))
+        print(f"  {non_terminal} → {' | '.join(production_strings)}")
+
+
+def print_results_table(results):
+    print("\n{:<10} {:<15} {:<15} {:<15} {:<15} {:<15}".format(
+         "Parser", "Avg Length", "Avg Time(s)", "Min Time(s)", "Max Time(s)", "Avg Memory(MB)"))
+    print("-" * 85)
+
+    for parser_name, stats in results.items():
+        if not stats['time']:  # If no successful results, skip
+            continue
+        
+        avg_len = sum(stats['length']) / len(stats['length'])
+        avg_time = sum(stats['time']) / len(stats['time'])
+        min_time = min(stats['time'])
+        max_time = max(stats['time'])
+        avg_memory = sum(stats['memory']) / len(stats['memory']) / (1024 * 1024)
+
+        print("{:<10} {:<15.1f} {:<15.4f} {:<15.4f} {:<15.4f} {:<15.2f}".format(
+            parser_name, avg_len, avg_time, min_time, max_time, avg_memory))
+        
 
 def export_to_csv(results, filename="benchmark_results.csv"):
     with open(filename, 'w', newline='') as csvfile:
@@ -319,20 +312,267 @@ def export_to_csv(results, filename="benchmark_results.csv"):
                 })
 
 
-print_results_table(results)
-# export_to_csv(results)
+def test1():
+    grammar = {
+        '<S>': [
+              ['<A>', '<B>'],
+              ['<B>', '<C>'],
+              ['<A>', '<C>'],
+              ['c']],
+       '<A>': [
+            ['<B>', '<C>'],
+            ['a']],
+       '<B>': [
+            ['<A>', '<C>'],
+            ['b']],
+       '<C>': [
+            ['c']],
+    }
+    start = '<S>'
+    property = "Normal Grammar"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 265
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
 
 
 
+def test2():
+    grammar = {
+        "<E>": [["<E>", "+", "<T>"], ["<T>"]],        
+        "<T>": [["<T>", "*", "<F>"], ["<F>"]],           
+        "<F>": [["(", "<E>", ")"], ["a"]]
+    }
+    start = "<E>"
+    property = "Highly Ambiguous Grammar"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 10
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
+
+
+def test3():
+    grammar = {
+        "<S>": [["<A>"], ["<B>"]],
+        "<A>": [["a", "<A>", "b"], []],
+        "<B>": [["a", "<B>", "b"], []]
+    }
+    start = "<S>"
+    property = "Ambiguous Grammar with Nullable Non-terminals"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 138
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
+
+
+def test4():
+    grammar = {
+        "<S>": [["<S>", "a"], ["a"]]
+    }
+    start = "<S>"
+    property = "Left Recursive Grammar"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 276
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
+
+
+def test5():
+    grammar = {
+        "<S>": [["a", "<S>", "b"], ["a"], []]
+    }
+    start = "<S>"
+    property = "Grammar with Non-Determinism"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 127
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
+
+
+def test6():
+    grammar = {
+        "<S>": [["a", "<S>"], ["a"]]
+    }
+    start = "<S>"
+    property = "Right Recursive Grammar"
+
+    parsers = {
+        'Valiant',
+        'CYK',
+        'GLL',
+        'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    count = 0
+    k_path_depth = 288
+
+    for path in k_paths(grammar, k_path_depth):
+        if path[0] in start:
+
+            tree = path_to_tree(path, grammar)
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+
+            if count == 3:
+                break
+            count += 1
+
+            t = tree_fill(grammar, tree)
+            s = collapse(t)
+            test_cases.append((s))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
 
 
 
-
-
-
-
-#####################3
-
-
-
-
+test1()
+test2()
+test3()
+test4()
+test5()
+test6()

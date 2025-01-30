@@ -1,295 +1,13 @@
 import copy
 import time
-from graphviz import Digraph
+# from graphviz import Digraph
+# from utility_parser.rnglr_utility import GSSNode, GSS, SPPFNode, PackingNode, function_I, build_epsilon_sppf, EnhancedExtractor, format_parsetree
 
 import cProfile
 profiler = cProfile.Profile()
 profiler.enable()
 
 
-
-
-class GSSNode:
-    def __init__(self, state, label_count):
-        self.count = label_count
-        self.state = state  # Parser state
-        self.successor = []  # List of edges to successor nodes
-
-    def add_link(self, successor, link):
-        """Add an edge to a predecessor node."""
-        self.successor.append((successor, link))
-
-    def __repr__(self):
-        repr = f"GSSNode(v{self.count}) - State: {self.state} - Children:"
-        for child in self.successor:
-            repr += f"\n        ~ GSSNode(v{child[0].count}) - Link({child[1].label})"
-
-        return repr
-
-
-class GSS:
-    def __init__(self):
-        self.label_count = 0
-        self.nodes = {}  # Map v_number -> GSSNode
-
-
-    def create_node(self, state):
-        new_node = GSSNode(state, self.label_count)
-        self.nodes[self.label_count] = new_node
-        self.label_count += 1
-        return new_node
-    
-    # def __repr__(self):
-    #     repr = f"GSSTree:"
-    #     for node in self.nodes.values():
-    #         repr += f"\n - {node}"
-    #     return repr
-
-    # def dfs(self, node, depth):
-    #     print(f"DEPTH {depth} {node.state}")
-    #     if depth == 0:
-    #         return {node}
-
-    #     reachable = set()
-    #     for successor, link in node.successor:
-    #         reachable |= self.dfs(successor, depth - 1)
-    #     return reachable
-
-    # def find_node_path_length(self, start, length):
-    #     # Find all nodes reachable from `start` with a path of a specific length.
-    #     return self.dfs(start, length)
-    
-
-    # def path_exists(self, start, end, length):
-    #     # Check if a path of a specific length exists between `start` and `end`.
-    #     reachable_nodes = self.find_node_path_length(start, length)
-    #     return end in reachable_nodes
-
-    # def dfs_through_link(self, node, depth, through_link):
-    #     if depth == 0:
-    #         if through_link == True:
-    #             return {node}
-    #         return set()
-
-
-    #     reachable = set()
-    #     for successor, link in node.successor_edges:
-    #         if link == through_link:
-    #             through_link = True
-    #         reachable |= self.dfs_through_z(successor, depth - 1, through_link)
-    #     return reachable
-
-    # def find_node_through_link(self, start, length, through_link):
-    #     # Find all nodes reachable from `start` with a path of a specific length.
-    #     return self.dfs(start, length, through_link)
-    
-    def find_paths_link_length_m(self, v, m):
-        def dfs_link(current_node, path):
-            # If the path length reaches m, add to results
-            if len(path) == m:
-                paths.add(tuple(path + [current_node]))
-                return
-            
-            # Recur for all neighbors
-            for node, link in current_node.successor:
-                dfs_link(node, path + [link])
-
-        paths = set()
-        dfs_link(v, [])  # Start DFS with the initial vertex
-        return paths
-        # paths = set()
-        # stack = [(v, [])]  # (current_node, current_path)
-        # while stack:
-        #     current_node, path_links = stack.pop()
-        #     if len(path_links) == m:
-        #         paths.add(tuple(path_links + [current_node]))
-        #         continue
-        #     for successor, link in current_node.successor:
-        #         stack.append((successor, path_links + [link]))
-        # return paths
-
-
-class SPPFNode:
-    def __init__(self, label, start_position=None, end_position=None):
-        self.label = label
-        self.start_position = start_position
-        self.end_postion = end_position
-        self.children = []
-        self.root_candidate = True
-
-
-    def add_child(self, child):
-        if child not in self.children:
-            self.children.append(child)
-
-
-    def remove_all_children(self):
-        self.children = []
-
-
-    def check_exist_children_sequence(self, A):
-        if not self.children:
-            return False
-        
-        if any(isinstance(child, PackingNode) for child in self.children):
-            for child in self.children:
-                for i in range(len(child.edges) - len(A) + 1):
-                    if child.edges[i:i + len(A)] == A:
-                        return True
-                    
-        else:
-            for i in range(len(self.children) - len(A) + 1):
-                if self.children[i:i + len(A)] == A:
-                    return True
-        return False
-
-    def __repr__(self):
-        return f"SPPFNode({self.label}, {self.start_position})"
-    
-
-class PackingNode:
-    def __init__(self):
-        self.edges = []
-
-    def add_edge(self, node):
-        self.edges.append(node)
-
-    def __repr__(self):
-        return f"PackingNode({self.edges})"
-
-
-# class SPPF:
-#     def __init__(self):
-#         self.nodes = []
-    
-#     def create_node(self, label, start_position):
-#         new_node = SPPFNode(label, start_position)
-#         self.nodes.append(new_node)
-#         return new_node
-
-
-def compute_nullable_parts(grammar):
-    nullable = set()
-    productions = {nt: list(rules) for nt, rules in grammar.items()}
-
-    # Step 1: Compute nullable non-terminals using fixed-point iteration
-    changed = True
-    while changed:
-        changed = False
-        for nt, rules in productions.items():
-            for rule in rules:
-                if all(sym == "epsilon" for sym in rule) and nt not in nullable:
-                    nullable.add(nt)
-                    changed = True
-
-    
-    return nullable
-
-
-
-def build_epsilon_sppf(grammar):
-    """
-    Builds epsilon-SPPF trees for non-trivial nullable suffixes of grammar rules,
-    with keys as integers.
-
-    Args:
-        grammar (dict): Grammar rules as a dictionary.
-
-    Returns:
-        epsilon_sppf (dict): Maps numeric keys to \(\epsilon\)-SPPF root nodes.
-    """
-    nullable = compute_nullable_parts(grammar)
-    epsilon_sppf = {}
-    epsilon_sppf[0] = SPPFNode("ε")
-    node_counter = 1  # Unique counter for keys
-
-    # Step 1: Create epsilon-SPPF trees for nullable non-terminals
-    for nt in nullable:
-        node = SPPFNode(nt)
-        node.add_child(epsilon_sppf[0])
-        epsilon_sppf[node_counter] = node
-        node_counter += 1
-
-    # Map single nullable symbols to their assigned numeric keys
-    count_map = len(nullable)
-    nullable_key_map = {nt: key for key, nt in enumerate(nullable, 1)}
-    # print(nullable_key_map)
-
-    # Step 2: Build epsilon-SPPF trees for non-trivial nullable suffixes
-    changes = True
-    while changes:
-        changes = False
-        for nt, rules in grammar.items():
-
-            for rule in rules:
-                # Collect nullable suffixes
-                nullable_suffix = []
-                for sym in reversed(rule):
-                    if sym in nullable:
-                        nullable_suffix.insert(0, sym)
-                        # Only process non-trivial nullable suffixes (length > 1)
-                        if len(nullable_suffix) > 1:
-                            suffix_key = tuple(nullable_suffix)
-
-                            existed = False
-                            for node in epsilon_sppf.values():
-                                if ''.join(suffix_key) == node.label:
-                                    existed = True
-                                    break
-
-                            if not existed:
-                                # Build an \(\epsilon\)-SPPF tree for this suffix
-                                root = SPPFNode(''.join(suffix_key))
-                                for part in nullable_suffix:
-                                    root.add_child(epsilon_sppf[nullable_key_map[part]])
-                                epsilon_sppf[node_counter] = root
-
-                                nullable |= set(suffix_key)
-                                node_counter += 1
-                                changes = True
-                        
-                        if len(nullable_suffix) == len(rule):
-                            suffix_key = tuple(nt)
-
-                            existed = False
-                            for node in epsilon_sppf.values():
-                                if ''.join(suffix_key) == node.label:
-                                    existed = True
-                                    break
-
-                            if not existed:
-                                # Build an \(\epsilon\)-SPPF tree for this suffix
-                                nullable |= set(suffix_key)
-                                root = SPPFNode(''.join(suffix_key))
-                                nullable_key_map[nt] = count_map
-                                count_map += 1
-
-                                for node in epsilon_sppf.values():
-                                    if ''.join(nullable_suffix) == node.label:       
-                                        root.add_child(node)
-
-                                epsilon_sppf[node_counter] = root
-                                node_counter += 1
-                                changes = True
-                    else:
-                        break  # Stop if a non-nullable symbol is found
-
-    return epsilon_sppf
-
-
-def function_I(epsilon_sppf, A, alpha, nullable_string):
-    if len(alpha) == 0:
-        for key in epsilon_sppf.keys():
-            node = epsilon_sppf[key]
-            if A == node.label:
-                return key
-    else:
-        if len(nullable_string) == 0:
-            return 0
-        for key in epsilon_sppf.keys():
-            node = epsilon_sppf[key]
-            if ''.join(nullable_string) == node.label:
-                return key
 
 
 class RNParseTableConstructer:
@@ -694,37 +412,37 @@ class RNParseTableConstructer:
                                         f = function_I(self.epsilon_sppf, lhs, alpha, nullable_string)
                                         col_ind = cols.index(lookahead)
                                         if ("r", (lhs, len(alpha), f)) not in self.parse_table[row_ind][col_ind]:
-                                            print(row_ind, lookahead, ("r", (lhs, len(alpha), f)))
+                                            # print(row_ind, lookahead, ("r", (lhs, len(alpha), f)))
                                             self.parse_table[row_ind][col_ind].append(("r", (lhs, len(alpha), f)))
                             break
 
                     ### if the rest if the string is nullable -> add reduce
 
 
-    	# printing table
-        print("\nParsing table:\n")
-        frmt = "{:>12}" * len(cols)
-        print(" ", frmt.format(*cols), "\n")
-        ptr = 0
-        j = 0
-        for y in self.parse_table:
-            # frmt1 = "{:>8}"
-            print(f"{{:>3}}".format('I'+str(j)), end="")
-            for e in y:
-                list_opp = []
-                for opp in e:
-                    word = ""
-                    word += opp[0]
-                    if len(opp) > 0:
-                        if type(opp[1]) is int:
-                            word += str(opp[1])
-                        else:
-                            for s in opp[1]:
-                                word += str(s)
-                    list_opp.append(word)
-                print(f"{{:>12}}".format("/".join(list_opp)), end="")
-            print()
-            j += 1
+    	# # printing table
+        # print("\nParsing table:\n")
+        # frmt = "{:>12}" * len(cols)
+        # print(" ", frmt.format(*cols), "\n")
+        # ptr = 0
+        # j = 0
+        # for y in self.parse_table:
+        #     # frmt1 = "{:>8}"
+        #     print(f"{{:>3}}".format('I'+str(j)), end="")
+        #     for e in y:
+        #         list_opp = []
+        #         for opp in e:
+        #             word = ""
+        #             word += opp[0]
+        #             if len(opp) > 0:
+        #                 if type(opp[1]) is int:
+        #                     word += str(opp[1])
+        #                 else:
+        #                     for s in opp[1]:
+        #                         word += str(s)
+        #             list_opp.append(word)
+        #         print(f"{{:>12}}".format("/".join(list_opp)), end="")
+        #     print()
+        #     j += 1
 
         # print("-------------------------------------------------------------------")
         # for y in self.parse_table:
@@ -776,7 +494,7 @@ class RNGLRParser():
         self.reverse_U = {}
         self.R = {}
         self.Q = []
-        self.N = []
+        self.N = {}
 
         self.a = []
         self.result = False
@@ -834,7 +552,7 @@ class RNGLRParser():
             for i in range(n+1):
                 while True:
 
-                    self.N = []
+                    self.N = {}
                     while self.R[i]:
                         self.reducer(i)
                     self.shifter(i)
@@ -852,10 +570,9 @@ class RNGLRParser():
                     #     if node.label == (self.start.strip("\'")) and node.start_position == v0.state:
                     #         if node.root_candidate:
                     self.sppf_root = self.sppf.get((self.start.strip("\'"), v0.state))
-
                     self.result = True
 
-        return self.result
+        return self.sppf_root, self.result
     
     def visualize_sppf(self, filename="sppf_graph"):
         """
@@ -876,6 +593,7 @@ class RNGLRParser():
             node_id = str(id(node))
             
             # SPPF Node styling
+            print(node)
             label = ', '.join(node.label) if node.label else 'ε'
             if node.start_position is not None:
                 label += f'\nStart: {node.start_position}'
@@ -968,12 +686,12 @@ class RNGLRParser():
                 #     print(node.label, node.start_position)       
 
 
-                z = self.sppf.get((X, c))
+                z = self.N.get((X, c))
 
                 if not z:
                     z = SPPFNode(X, c)
                     self.sppf[(X, c)] = z
-                    self.N.append(z)
+                    self.N[(X, c)] = z
 
             # if m == 0:
             w = self.find_node_in_U_i_with_label(i, l)
@@ -1137,15 +855,406 @@ class RNGLRParser():
                 self.add_node_to_sppf(child)
         return node
             
+class GSSNode:
+    def __init__(self, state, label_count):
+        self.count = label_count
+        self.state = state  # Parser state
+        self.successor = []  # List of edges to successor nodes
 
+    def add_link(self, successor, link):
+        """Add an edge to a predecessor node."""
+        self.successor.append((successor, link))
+
+    def __repr__(self):
+        repr = f"GSSNode(v{self.count}) - State: {self.state} - Children:"
+        for child in self.successor:
+            repr += f"\n        ~ GSSNode(v{child[0].count}) - Link({child[1].label})"
+
+        return repr
+
+
+class GSS:
+    def __init__(self):
+        self.label_count = 0
+        self.nodes = {}  # Map v_number -> GSSNode
+
+
+    def create_node(self, state):
+        new_node = GSSNode(state, self.label_count)
+        self.nodes[self.label_count] = new_node
+        self.label_count += 1
+        return new_node
+    
+    def find_paths_link_length_m(self, v, m):
+        def dfs_link(current_node, path):
+            # If the path length reaches m, add to results
+            if len(path) == m:
+                paths.add(tuple(path + [current_node]))
+                return
+            
+            # Recur for all neighbors
+            for node, link in current_node.successor:
+                dfs_link(node, path + [link])
+
+        paths = set()
+        dfs_link(v, [])  # Start DFS with the initial vertex
+        return paths
+
+
+class SPPFNode:
+    def __init__(self, label, start_position=None, end_position=None):
+        self.label = label
+        self.start_position = start_position
+        self.end_postion = end_position
+        self.children = []
+        self.root_candidate = True
+
+
+    def add_child(self, child):
+        if child not in self.children:
+            self.children.append(child)
+
+
+    def remove_all_children(self):
+        self.children = []
+
+
+    def check_exist_children_sequence(self, A):
+        if not self.children:
+            return False
+        
+        if any(isinstance(child, PackingNode) for child in self.children):
+            for child in self.children:
+                for i in range(len(child.edges) - len(A) + 1):
+                    if child.edges[i:i + len(A)] == A:
+                        return True
+                    
+        else:
+            for i in range(len(self.children) - len(A) + 1):
+                if self.children[i:i + len(A)] == A:
+                    return True
+        return False
+
+    def __repr__(self):
+        return f"SPPFNode({self.label}, {self.start_position})"
+    
+
+class PackingNode:
+    def __init__(self):
+        self.edges = []
+
+    def add_edge(self, node):
+        self.edges.append(node)
+
+    def __repr__(self):
+        return f"PackingNode({self.edges})"
+
+
+
+def compute_nullable_parts(grammar):
+    nullable = set()
+    productions = {nt: list(rules) for nt, rules in grammar.items()}
+
+    # Step 1: Compute nullable non-terminals using fixed-point iteration
+    changed = True
+    while changed:
+        changed = False
+        for nt, rules in productions.items():
+            for rule in rules:
+                if all(sym == "epsilon" for sym in rule) and nt not in nullable:
+                    nullable.add(nt)
+                    changed = True
+
+    
+    return nullable
+
+
+
+
+def build_epsilon_sppf(grammar):
+    """
+    Builds epsilon-SPPF trees for non-trivial nullable suffixes of grammar rules,
+    with keys as integers.
+
+    Args:
+        grammar (dict): Grammar rules as a dictionary.
+
+    Returns:
+        epsilon_sppf (dict): Maps numeric keys to \(\epsilon\)-SPPF root nodes.
+    """
+    nullable = compute_nullable_parts(grammar)
+    epsilon_sppf = {}
+    epsilon_sppf[0] = SPPFNode("ε")
+    node_counter = 1  # Unique counter for keys
+
+    # Step 1: Create epsilon-SPPF trees for nullable non-terminals
+    for nt in nullable:
+        node = SPPFNode(nt)
+        node.add_child(epsilon_sppf[0])
+        epsilon_sppf[node_counter] = node
+        node_counter += 1
+
+    # Map single nullable symbols to their assigned numeric keys
+    count_map = len(nullable)
+    nullable_key_map = {nt: key for key, nt in enumerate(nullable, 1)}
+    # print(nullable_key_map)
+
+    # Step 2: Build epsilon-SPPF trees for non-trivial nullable suffixes
+    changes = True
+    while changes:
+        changes = False
+        for nt, rules in grammar.items():
+
+            for rule in rules:
+                # Collect nullable suffixes
+                nullable_suffix = []
+                for sym in reversed(rule):
+                    if sym in nullable:
+                        nullable_suffix.insert(0, sym)
+                        # Only process non-trivial nullable suffixes (length > 1)
+                        if len(nullable_suffix) > 1:
+                            suffix_key = tuple(nullable_suffix)
+
+                            existed = False
+                            for node in epsilon_sppf.values():
+                                if ''.join(suffix_key) == node.label:
+                                    existed = True
+                                    break
+
+                            if not existed:
+                                # Build an \(\epsilon\)-SPPF tree for this suffix
+                                root = SPPFNode(''.join(suffix_key))
+                                for part in nullable_suffix:
+                                    root.add_child(epsilon_sppf[nullable_key_map[part]])
+                                epsilon_sppf[node_counter] = root
+
+                                nullable |= set(suffix_key)
+                                node_counter += 1
+                                changes = True
+                        
+                        if len(nullable_suffix) == len(rule):
+                            suffix_key = tuple(nt)
+
+                            existed = False
+                            for node in epsilon_sppf.values():
+                                if ''.join(suffix_key) == node.label:
+                                    existed = True
+                                    break
+
+                            if not existed:
+                                # Build an \(\epsilon\)-SPPF tree for this suffix
+                                nullable |= set(suffix_key)
+                                root = SPPFNode(''.join(suffix_key))
+                                nullable_key_map[nt] = count_map
+                                count_map += 1
+
+                                for node in epsilon_sppf.values():
+                                    if ''.join(nullable_suffix) == node.label:       
+                                        root.add_child(node)
+
+                                epsilon_sppf[node_counter] = root
+                                node_counter += 1
+                                changes = True
+                    else:
+                        break  # Stop if a non-nullable symbol is found
+
+    return epsilon_sppf
+
+
+def function_I(epsilon_sppf, A, alpha, nullable_string):
+    if len(alpha) == 0:
+        for key in epsilon_sppf.keys():
+            node = epsilon_sppf[key]
+            if A == node.label:
+                return key
+    else:
+        if len(nullable_string) == 0:
+            return 0
+        for key in epsilon_sppf.keys():
+            node = epsilon_sppf[key]
+            if ''.join(nullable_string) == node.label:
+                return key
+            
+            
+class ChoiceNode:
+    def __init__(self, parent, total):
+        self._p, self._chosen = parent, 0
+        self._total, self.next = total, None
+
+    def __str__(self):
+        return '(%s/%s %s)' % (str(self._chosen),
+                               str(self._total), str(self.next))
+
+    def __repr__(self): return repr((self._chosen, self._total))
+
+    def chosen(self): return self._chosen
+
+    def finished(self):
+        return self._chosen >= self._total
+    
+    def increment(self):
+        # as soon as we increment, next becomes invalid
+        self.next = None
+        self._chosen += 1
+        if self.finished():
+            if self._p is None: return None
+            return self._p.increment()
+        return self
+    
+
+class EnhancedExtractor:
+    def __init__(self, forest):
+        self.my_forest = forest
+        self.choices = ChoiceNode(None, 1)
+
+    def choose_path(self, arr_len, choices):
+        if choices.next is not None:
+            if choices.next.finished():
+                return None, choices.next
+        else:
+            choices.next = ChoiceNode(choices, arr_len)
+        next_choice = choices.next.chosen()
+        return next_choice, choices.next
+    
+    def extract_a_node(self, forest_node, seen, choices):
+        if isinstance(forest_node, SPPFNode):
+            if not forest_node.children:
+                return (forest_node.label, []), choices
+            
+            packing_node_children = isinstance(forest_node.children[0], PackingNode)
+
+            # PackingNode child
+            if packing_node_children:
+
+                child_ind, new_choices = self.choose_path(len(forest_node.children), choices)
+                
+                # out of choice
+                if child_ind is None:
+                    return None, new_choices 
+                if str(id(forest_node.children[child_ind])) in seen:
+                    return None, new_choices
+                
+                n, newer_choices = self.extract_a_node(forest_node.children[child_ind], 
+                                                       seen | {str(id(forest_node.children[child_ind]))}, 
+                                                       new_choices)
+            
+                return (forest_node.label, n), newer_choices
+            
+            # SPPFNode child
+            list_n = []
+            for child in forest_node.children:
+                n, newer_choices = self.extract_a_node(
+                        child, seen | {str(id(child))}, choices)
+            
+                if n is None: return None, newer_choices
+                list_n.append(n)
+
+            return (forest_node.label, list_n), newer_choices
+
+
+        elif isinstance(forest_node, PackingNode):
+            cur_child_ind, new_choices = self.choose_path(len(forest_node.edges), choices)
+
+            # out of choice
+            if cur_child_ind is None:
+                return None, new_choices
+            if str(id(forest_node.edges[cur_child_ind])) in seen:
+                return None, new_choices 
+
+            packing_node_children = isinstance(forest_node.edges[0], PackingNode)
+
+            # PackingNode child
+            if packing_node_children:
+
+                child_ind, new_choices = self.choose_path(len(forest_node.edges), choices)
+                
+                # out of choice
+                if child_ind is None:
+                    return None, new_choices
+                if str(id(forest_node.edges[child_ind])) in seen:
+                    return None, new_choices
+
+                
+                n, newer_choices = self.extract_a_node(forest_node.edges[child_ind], 
+                                                       seen | {str(id(forest_node.edges[child_ind]))}, 
+                                                       choices)
+            
+                return n, newer_choices
+            
+            # SPPFNode child
+            list_n = []
+            for child in forest_node.edges:
+                n, newer_choices = self.extract_a_node(
+                        child, seen | {str(id(child))}, choices)
+            
+                if n is None: return None, newer_choices
+                list_n.append(n)
+
+            return list_n, newer_choices
+        
+    def extract_a_tree(self):
+        choices = self.choices
+        while not self.choices.finished():
+            parse_tree, choices = self.extract_a_node(
+                    self.my_forest,
+                    set(), self.choices)
+            choices.increment()
+            if parse_tree is not None:
+                return parse_tree
+        return None
     
 
 
+class O:
+    def __init__(self, **keys): self.__dict__.update(keys)
+
+OPTIONS   = O(V='│', H='─', L='└', J = '├')
+
+def format_node(node):
+    key = node[0]
+    if key and (key[0], key[-1]) ==  ('<', '>'): return key
+    return repr(key)
+
+def get_children(node):
+    return node[1]
+
+def display_tree(node, format_node=format_node, get_children=get_children,
+                 options=OPTIONS):
+    print(format_node(node))
+    for line in format_tree(node, format_node, get_children, options):
+        print(line)
+
+def format_tree(node, format_node, get_children, options, prefix=''):
+    children = get_children(node)
+    if not children: return
+    *children, last_child = children
+    for child in children:
+        next_prefix = prefix + options.V + '   '
+        yield from format_child(child, next_prefix, format_node, get_children,
+                                options, prefix, False)
+    last_prefix = prefix + '    '
+    yield from format_child(last_child, last_prefix, format_node, get_children,
+                            options, prefix, True)
+
+def format_child(child, next_prefix, format_node, get_children, options,
+                 prefix, last):
+    sep = (options.L if last else options.J)
+    yield prefix + sep + options.H + ' ' + format_node(child)
+    yield from format_tree(child, format_node, get_children, options, next_prefix)
+
+format_parsetree = display_tree
+
 # grammar = {
-#     "S": [["E"]],
-#     "E": [["E", "+", "E"], ["E", "*", "E"], ["id"]]
+#     "S": [["S", "S"], ["a"], ["epsilon"]]
 # }
 # start = "S"
+
+# grammar = {
+#     "S": [["E"]],
+#     "E": [["E", "+", "E"], ["E", "*", "E"], ["a"]]
+# }
+# start = "S"
+
 # grammar = {
 #         "S": [["a", "S", "B", "B"]],
 #         "B": [["b"], ["epsilon"]]
@@ -1176,13 +1285,37 @@ class RNGLRParser():
 # }
 
 # start = "<E>"
-# # Test the Parser
+
+
+# grammar = {
+#                 "S": [["A"]],
+#                 "A": [["B"]],
+#                 "B": [["C"]],
+#                 "C": [[]]
+#             }
+# start = "S"
+# Test the Parser
 # t = RNParseTableConstructer(grammar, start)
 # parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
 
+# input_string = list("a")
 
-# input_string = []
-# parser.parse(input_string)
+# root_node, res = parser.parse(input_string)
+# print("Correct String:", res)
+
+# ee = EnhancedExtractor(root_node)
+# while True:
+#     t = ee.extract_a_tree()
+#     if t is None: break
+#     format_parsetree(t)
+
+# a, b  = generate_trees(root)
+# print(a, b)
+# for tree in b:
+#     print(tree)
+#     format_parsetree(tree)
+
+
 
 # parser.visualize_sppf(filename="my_parse_tree")
 # t.printResultAndGoto()
