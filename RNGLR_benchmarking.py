@@ -17,7 +17,7 @@ import traceback
 
 
 
-def benchmark(parsers, grammar, start, test_cases):
+def benchmark(parsers, grammar, start, test_cases, export_path):
     results = {name: {'length': [], 'time': [], 'memory': []} for name in parsers}
 
     for test_no, test_str in enumerate(test_cases):
@@ -31,90 +31,89 @@ def benchmark(parsers, grammar, start, test_cases):
             elif name == "Earley":
                 earley_parser = earley.EarleyParser(grammar)
             elif name == "RNGLR":
-                rntable = rnglr.RNParseTableConstructer(grammar, start)
-                rnglr_parser = rnglr.RNGLRParser(rntable.grammar, rntable.non_terminals, rntable.terminals, rntable.start, rntable.parse_table, rntable.epsilon_sppf)
+                rnglr_parser = rnglr.RNGLRParser(start, export_path, grammar)
             
             
-            try:
-                if name == "GLL":
-                    start_time = time.perf_counter()
-                    tracemalloc.start()
+            # try:
+            if name == "GLL":
+                start_time = time.perf_counter()
+                tracemalloc.start()
 
-                    gll_result = gll_parser.recognize_on(test_str, start)
-                    ee = gll.EnhancedExtractor(gll_result)
-                    while True:
-                        t = ee.extract_a_tree()
-                        if t is None: break
+                gll_result = gll_parser.recognize_on(test_str, start)
+                ee = gll.EnhancedExtractor(gll_result)
+                while True:
+                    t = ee.extract_a_tree()
+                    if t is None: break
 
-                    parse_time = time.perf_counter() - start_time
-                    memory_peak = tracemalloc.get_traced_memory()[1]
-                    tracemalloc.stop()
+                parse_time = time.perf_counter() - start_time
+                memory_peak = tracemalloc.get_traced_memory()[1]
+                tracemalloc.stop()
 
-                elif name == "Valiant":
-                    start_time = time.perf_counter()
-                    tracemalloc.start()
+            elif name == "Valiant":
+                start_time = time.perf_counter()
+                tracemalloc.start()
 
-                    v = valiant_parser.parse_on(test_str, start)
-                    for t in v:
-                        pass
+                v = valiant_parser.parse_on(test_str, start)
+                for t in v:
+                    pass
 
-                    parse_time = time.perf_counter() - start_time
-                    memory_peak = tracemalloc.get_traced_memory()[1]
-                    tracemalloc.stop()
+                parse_time = time.perf_counter() - start_time
+                memory_peak = tracemalloc.get_traced_memory()[1]
+                tracemalloc.stop()
 
-                elif name == "CYK":
-                    start_time = time.perf_counter()
-                    tracemalloc.start()
+            elif name == "CYK":
+                start_time = time.perf_counter()
+                tracemalloc.start()
 
-                    cyk_result = cyk_parser.parse_on(test_str, start)
-                    for t in cyk_result:
-                        pass
+                cyk_result = cyk_parser.parse_on(test_str, start)
+                for t in cyk_result:
+                    pass
 
-                    parse_time = time.perf_counter() - start_time
-                    memory_peak = tracemalloc.get_traced_memory()[1]
-                    tracemalloc.stop()
+                parse_time = time.perf_counter() - start_time
+                memory_peak = tracemalloc.get_traced_memory()[1]
+                tracemalloc.stop()
 
-                elif name == "Earley":
-                    start_time = time.perf_counter()
-                    tracemalloc.start()
+            elif name == "Earley":
+                start_time = time.perf_counter()
+                tracemalloc.start()
 
-                    ee = earley.EnhancedExtractor(earley_parser, test_str, start)
-                    while True:
-                        t = ee.extract_a_tree()
-                        if t is None: break
+                ee = earley.EnhancedExtractor(earley_parser, test_str, start)
+                while True:
+                    t = ee.extract_a_tree()
+                    if t is None: break
 
-                    parse_time = time.perf_counter() - start_time
-                    memory_peak = tracemalloc.get_traced_memory()[1]
-                    tracemalloc.stop()
+                parse_time = time.perf_counter() - start_time
+                memory_peak = tracemalloc.get_traced_memory()[1]
+                tracemalloc.stop()
 
-                elif name == "RNGLR":
-                    # import cProfile
-                    # profiler = cProfile.Profile()
-                    # profiler.enable()
-                    start_time = time.perf_counter()
-                    tracemalloc.start()
+            elif name == "RNGLR":
+                # import cProfile
+                # profiler = cProfile.Profile()
+                # profiler.enable()
+                start_time = time.perf_counter()
+                tracemalloc.start()
 
-                    rnglr_root, res = rnglr_parser.parse(list(test_str))
-                    ee = rnglr.EnhancedExtractor(rnglr_root)
-                    while True:
-                        t = ee.extract_a_tree()
-                        if t is None: break
+                rnglr_root, res = rnglr_parser.parse(list(test_str))
+                ee = rnglr.EnhancedExtractor(rnglr_root)
+                while True:
+                    t = ee.extract_a_tree()
+                    if t is None: break
 
-                    parse_time = time.perf_counter() - start_time
-                    memory_peak = tracemalloc.get_traced_memory()[1]
-                    tracemalloc.stop()
+                parse_time = time.perf_counter() - start_time
+                memory_peak = tracemalloc.get_traced_memory()[1]
+                tracemalloc.stop()
 
-                    # profiler.disable()
-                    # profiler.print_stats(sort="time")
+                # profiler.disable()
+                # profiler.print_stats(sort="time")
 
 
-                results[name]['length'].append(len(test_str))
-                results[name]['time'].append(parse_time)
-                results[name]['memory'].append(memory_peak)
+            results[name]['length'].append(len(test_str))
+            results[name]['time'].append(parse_time)
+            results[name]['memory'].append(memory_peak)
                 
 
-            except Exception as e:
-                traceback.print_exc()
+            # except Exception as e:
+            #     traceback.print_exc()
     return results
 
 # Example grammar
@@ -311,11 +310,79 @@ def export_to_csv(results, filename="benchmark_results.csv"):
                     # 'success': stats['success']
                 })
 
+def test0():
+    def remove_whitespace(json_str):
+        return [char for char in json_str if char not in " \t\n\r"]
+
+    grammar = {
+        "<json>": [["<object>"], ["<array>"]],
+
+        "<object>": [["{", "<members>", "}"], ["{", "}"]],
+        "<members>": [["<pair>"], ["<pair>", ",", "<members>"]],
+        "<pair>": [["<string>", ":", "<value>"]],
+
+        "<array>": [["[", "<elements>", "]"], ["[", "]"]],
+        "<elements>": [["<value>"], ["<value>", ",", "<elements>"]],
+
+        "<value>": [
+            ["<string>"],
+            ["<number>"],
+            ["<object>"],
+            ["<array>"],
+            ["true"],
+            ["false"],
+            ["null"]
+        ],
+
+        "<string>": [["\"", "<characters>", "\""]],
+        "<characters>": [["<character>", "<characters>"], []],  # ε (empty string)
+        
+        "<character>": [["%s" % chr(i)] for i in range(32, 127) if i not in [34, 92]],  # Excluding '"' (34) and '\' (92)
+
+        "<number>": [["<integer>", "<fraction>", "<exponent>"]],
+        "<integer>": [["-", "<digit>", "<digits>"], ["<digit>", "<digits>"]],
+        "<fraction>": [[".", "<digit>", "<digits>"], []],  # ε (optional fraction)
+        "<exponent>": [["e", "<sign>", "<digit>", "<digits>"], ["E", "<sign>", "<digit>", "<digits>"], []],  # ε (optional exponent)
+        "<sign>": [["+"], ["-"], []],  # ε (optional sign)
+
+        "<digits>": [["<digit>", "<digits>"], []],  # ε (empty or sequence of digits)
+        "<digit>": [["%s" % str(i)] for i in range(10)]  # Generates ["0"], ["1"], ..., ["9"]
+    }
+    start = "<json>"
+    property = "JSON Grammar"
+
+    parsers = {
+        # 'Valiant',
+        # 'CYK',
+        # 'GLL',
+        # 'Earley',
+        'RNGLR'
+    }
+
+    test_cases = []
+    json_test1 = """
+    {
+        "name": "Alice",
+        "age": 25,
+        "address": {
+            "street": "123 Main St",
+            "city": "Wonderland",
+            "zip": "12345"
+        }
+        ]
+    }
+    """
+    # print(remove_whitespace(json_test1))
+    test_cases.append(remove_whitespace(json_test1))
+
+    results = benchmark(parsers, grammar, start, test_cases)
+
+    print_grammar(grammar, start, property)
+    print_results_table(results)
 
 def test1():
     grammar = {
-        '<S>': [
-              ['<A>', '<B>'],
+        '<S>': [['<A>', '<B>'],
               ['<B>', '<C>'],
               ['<A>', '<C>'],
               ['c']],
@@ -341,7 +408,7 @@ def test1():
 
     test_cases = []
     count = 0
-    k_path_depth = 265
+    k_path_depth = 100
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -358,7 +425,10 @@ def test1():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
 
     print_grammar(grammar, start, property)
     print_results_table(results)
@@ -375,8 +445,8 @@ def test2():
     property = "Highly Ambiguous Grammar"
 
     parsers = {
-        'Valiant',
-        'CYK',
+        # 'Valiant',
+        # 'CYK',
         'GLL',
         'Earley',
         'RNGLR'
@@ -384,7 +454,7 @@ def test2():
 
     test_cases = []
     count = 0
-    k_path_depth = 10
+    k_path_depth = 5
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -401,8 +471,10 @@ def test2():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
-
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
     print_grammar(grammar, start, property)
     print_results_table(results)
 
@@ -417,16 +489,16 @@ def test3():
     property = "Ambiguous Grammar with Nullable Non-terminals"
 
     parsers = {
-        'Valiant',
-        'CYK',
-        'GLL',
+        # 'Valiant',
+        # 'CYK',
+        # 'GLL',
         'Earley',
         'RNGLR'
     }
 
     test_cases = []
     count = 0
-    k_path_depth = 138
+    k_path_depth = 100
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -443,7 +515,10 @@ def test3():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
 
     print_grammar(grammar, start, property)
     print_results_table(results)
@@ -457,8 +532,8 @@ def test4():
     property = "Left Recursive Grammar"
 
     parsers = {
-        'Valiant',
-        'CYK',
+        # 'Valiant',
+        # 'CYK',
         'GLL',
         'Earley',
         'RNGLR'
@@ -466,7 +541,7 @@ def test4():
 
     test_cases = []
     count = 0
-    k_path_depth = 276
+    k_path_depth = 100
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -483,7 +558,10 @@ def test4():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
 
     print_grammar(grammar, start, property)
     print_results_table(results)
@@ -497,16 +575,16 @@ def test5():
     property = "Grammar with Non-Determinism"
 
     parsers = {
-        'Valiant',
-        'CYK',
-        'GLL',
+        # 'Valiant',
+        # 'CYK',
+        # 'GLL',
         'Earley',
         'RNGLR'
     }
 
     test_cases = []
     count = 0
-    k_path_depth = 127
+    k_path_depth = 100
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -523,7 +601,10 @@ def test5():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
 
     print_grammar(grammar, start, property)
     print_results_table(results)
@@ -538,7 +619,7 @@ def test6():
 
     parsers = {
         'Valiant',
-        'CYK',
+        # 'CYK',
         'GLL',
         'Earley',
         'RNGLR'
@@ -546,7 +627,7 @@ def test6():
 
     test_cases = []
     count = 0
-    k_path_depth = 288
+    k_path_depth = 100
 
     for path in k_paths(grammar, k_path_depth):
         if path[0] in start:
@@ -563,13 +644,16 @@ def test6():
             s = collapse(t)
             test_cases.append((s))
 
-    results = benchmark(parsers, grammar, start, test_cases)
-
+    rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
+    
     print_grammar(grammar, start, property)
     print_results_table(results)
 
 
-
+# test0()
 test1()
 test2()
 test3()

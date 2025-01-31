@@ -17,7 +17,9 @@ class TestRNGLRParser(unittest.TestCase):
         }
         start = "E"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
         
         # Valid inputs
         self.assertTrue(glr_parser.parse(["id"]))
@@ -30,13 +32,15 @@ class TestRNGLRParser(unittest.TestCase):
     def test_epsilon_grammar(self):
         grammar = {
             "S": [["A", "B"]],
-            "A": [["a"], ["epsilon"]],
-            "B": [["b"], ["epsilon"]]
+            "A": [["a"], []],
+            "B": [["b"], []]
         }
         start = "S"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
-        
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
+
         # Empty input (parsed via epsilon rules)
         self.assertTrue(glr_parser.parse([]))
         self.assertTrue(glr_parser.parse(["a"]))
@@ -52,8 +56,10 @@ class TestRNGLRParser(unittest.TestCase):
         }
         start = "E"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
-        
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
+
         self.assertTrue(glr_parser.parse(["id", "+", "id", "+", "id"]))
         # Verify GSS has no cycles
         self.assertEqual(len(glr_parser.gss.nodes), 12)  # Adjust based on your GSS logic
@@ -67,8 +73,10 @@ class TestRNGLRParser(unittest.TestCase):
         }
         start = "S"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
-        
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
+
         self.assertTrue(glr_parser.parse(["a", "a", "a"]))
         # Verify SPPF has right-branching structure
         self.assertGreaterEqual(len(glr_parser.sppf_root.children), 2)
@@ -83,8 +91,10 @@ class TestRNGLRParser(unittest.TestCase):
         }
         start = "S"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
-        
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
+
         self.assertTrue(glr_parser.parse(["id", "+", "id", "*", "id"]))
         # Verify SPPF has packing nodes
         def has_packing_nodes(sppf_root):
@@ -112,14 +122,16 @@ class TestRNGLRParser(unittest.TestCase):
     def test_complex_grammar(self):
         grammar = {
             "S": [["A", "B", "C"], ["S", "S"]],
-            "A": [["a"], ["epsilon"]],
-            "B": [["b"], ["epsilon"]],
-            "C": [["c"], ["epsilon"]]
+            "A": [["a"], []],
+            "B": [["b"], []],
+            "C": [["c"], []]
         }
         start = "S"
         parser = RNParseTableConstructer(grammar, start)
-        glr_parser = RNGLRParser(parser.grammar, parser.non_terminals, parser.terminals, start, parser.parse_table, parser.epsilon_sppf)
-        
+        export_filepath = "tables/test.csv"
+        parser.export_to_csv(export_filepath)
+        glr_parser = RNGLRParser(start, export_filepath, grammar)
+
         # Fully nullable
         self.assertTrue(glr_parser.parse([]))
         # Partially nullable
@@ -157,8 +169,8 @@ class TestRNGLRParser(unittest.TestCase):
     def test_nested_nullable_non_terminals(self):
         grammar = {
             "S": [["A", "B"]],
-            "A": [["a"], ["epsilon"]],
-            "B": [["b"], ["epsilon"]]
+            "A": [["a"], []],
+            "B": [["b"], []]
         }
         self._run_test(grammar, "S", [], True, "Fully nullable parse")
         self._run_test(grammar, "S", ["a"], True, "Partially nullable parse")
@@ -166,7 +178,7 @@ class TestRNGLRParser(unittest.TestCase):
     # Test Case 10: Deeply nested brackets
     def test_deeply_nested_brackets(self):
         self._run_test(
-            {"S": [["(", "S", ")"], ["epsilon"]]},
+            {"S": [["(", "S", ")"], []]},
             "S",
             ["(", "(", ")", ")"],
             True,
@@ -189,8 +201,8 @@ class TestRNGLRParser(unittest.TestCase):
         self._run_test(
             {
                 "S": [["A", "B", "C"]],
-                "A": [["a"], ["epsilon"]],
-                "B": [["b"], ["epsilon"]],
+                "A": [["a"], []],
+                "B": [["b"], []],
                 "C": [["c"]]
             },
             "S",
@@ -202,7 +214,7 @@ class TestRNGLRParser(unittest.TestCase):
     # Test Case 13: Epsilon-only grammar
     def test_epsilon_only_grammar(self):
         self._run_test(
-            {"S": [["epsilon"]]},
+            {"S": [[]]},
             "S",
             [],
             True,
@@ -222,7 +234,7 @@ class TestRNGLRParser(unittest.TestCase):
                 "S": [["A"]],
                 "A": [["B"]],
                 "B": [["C"]],
-                "C": [["epsilon"]]
+                "C": [[]]
             },
             "S",
             [],
@@ -235,8 +247,8 @@ class TestRNGLRParser(unittest.TestCase):
         grammar = {
             "S": [["S", "a"], ["A"]],
             "A": [["B", "C"]],
-            "B": [["epsilon"]],
-            "C": [["epsilon"]]
+            "B": [[]],
+            "C": [[]]
         }
         self._run_test(grammar, "S", [], True, "Recursive nullable base case")
         self._run_test(
@@ -256,12 +268,15 @@ class TestRNGLRParser(unittest.TestCase):
         with self.subTest(test_name=test_name):
             # Build parser components
             parser = RNParseTableConstructer(grammar, start)
-            glr_parser = RNGLRParser(parser.grammar, parser.non_terminals,
-                                    parser.terminals, start, parser.parse_table,
-                                    parser.epsilon_sppf)
+            export_filepath = "tables/test.csv"
+            parser.export_to_csv(export_filepath)
+            glr_parser = RNGLRParser(start, export_filepath, grammar)
+            # glr_parser = RNGLRParser(parser.grammar, parser.non_terminals,
+            #                         parser.terminals, start, parser.parse_table,
+            #                         parser.epsilon_sppf)
             
             # Run parsing
-            result = glr_parser.parse(input_tokens)
+            root, result = glr_parser.parse(input_tokens)
             
             # Core assertions
             self.assertEqual(result, expected_result, 
@@ -287,9 +302,9 @@ class TestRNGLRParser(unittest.TestCase):
                     return traverse(sppf_root) if sppf_root else False
 
 
-                has_packing = has_packing_nodes(glr_parser.sppf_root)
+                has_packing = has_packing_nodes(root)
                 self.assertTrue(has_packing, 
-                              f"{test_name} should have packing nodes {glr_parser.sppf_root} {glr_parser.sppf_root.children}")
+                              f"{test_name} should have packing nodes {root} {root.children}")
             
             if expected_result and glr_parser.sppf_root:
                 # Verify SPPF structure exists for valid parses

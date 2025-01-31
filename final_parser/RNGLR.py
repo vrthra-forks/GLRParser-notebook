@@ -1,5 +1,6 @@
 import copy
-import time
+import os
+import csv
 # from graphviz import Digraph
 # from utility_parser.rnglr_utility import GSSNode, GSS, SPPFNode, PackingNode, function_I, build_epsilon_sppf, EnhancedExtractor, format_parsetree
 
@@ -419,7 +420,7 @@ class RNParseTableConstructer:
                     ### if the rest if the string is nullable -> add reduce
 
 
-    	# # printing table
+    	# printing table
         # print("\nParsing table:\n")
         # frmt = "{:>12}" * len(cols)
         # print(" ", frmt.format(*cols), "\n")
@@ -470,18 +471,62 @@ class RNParseTableConstructer:
     #     for itr in diction:
     #         print(f"GOTO ( I{itr[0]} , {itr[1]} ) = I{self.state_map[itr]}")
 
+    def export_to_csv(self, filepath):
+        rows = list(self.state_dict.keys())
+        cols = self.terminals + ["$"] + self.non_terminals
+
+        if not os.path.exists(os.path.dirname(filepath)):
+            os.makedirs(os.path.dirname(filepath))  # Create directories if they don't exist
+
+        # saving the parse table to a csv file
+        with open(filepath, "w") as file:
+            file.write("state,"+",".join(cols)+"\n")
+            j = 0
+            for i, y in enumerate(self.parse_table):
+                # line = ""
+                # line += f"I{j}"
+                # for e in y:
+                #     line += "," + "/".join(e)
+                # file.write(line + "\n")
+                list_opp = [str(i)]
+                for e in y:
+                    entry = ""
+                    count = 0
+                    for opp in e:
+                        if opp == 'acc':
+                            entry += 'acc'
+                        else:
+                            entry += opp[0] + "."
+                            if len(opp) > 0:
+                                # p format ('p', 4)
+                                if type(opp[1]) is int:
+                                    entry += str(opp[1]) + "."
+                                # r format ('r' ('E', 3, 0))
+                                else:
+                                    for s in opp[1]:
+                                        entry += str(s) + "."
+                        if count < len(e) - 1:
+                            entry += "/"
+                        count += 1
+                    list_opp.append(entry)
+
+                file.write(",".join(list_opp) + "\n")
+                j += 1
+
     
 
 class RNGLRParser():
-    def __init__(self, grammar, non_terminals, terminals, start, parse_table, epsilon_sppf, start_state=0, accept_state=1): 
-        self.grammar = grammar
-        self.non_terminals = non_terminals
-        self.terminals = terminals
-        self.symbols = self.terminals + ["$"] + self.non_terminals
+    def __init__(self, start, filepath, input_grammar, start_state=0, accept_state=1): 
+        self.grammar = {}
         self.start = start
+        self.terminals = []
+        self.non_terminals = []
+        self.formattingGrammar(input_grammar)
+        self.symbols = self.terminals + ["$"] + self.non_terminals
 
-        self.parse_table = self.load_parse_table(parse_table)
-        self.epsilon_sppf = epsilon_sppf
+        
+        self.parse_table = self.load_parse_table(filepath)
+        self.epsilon_sppf = build_epsilon_sppf(input_grammar)
 
         self.start_state = start_state
         self.accept_state = accept_state
@@ -500,10 +545,35 @@ class RNGLRParser():
         self.result = False
 
 
-        self.count_viz = 0
 
+    def parse_entry_csv(self, entry):
+        if not entry:  # Empty entry
+            return []
+        elif '/' in entry:  # Multiple entries
+            return [self.parse_entry_csv(e)[0] for e in entry.split('/')]
+        elif entry == 'acc':
+            return ['acc']
+        elif entry.startswith('p'):  # 'p' entry
+            e = entry.split(".")
+            return [('p', int(e[1]))]
+        elif entry.startswith('r'):  # 'r' entry
+            e = entry.split(".")
+            return [('r', (e[1], int(e[2]), int(e[3])))]
+        else:
+            return entry  # Default case (header values, etc.)
+        
+    def parse_table_from_csv(self, filepath):
+        result = [] 
+        with open(filepath, 'r') as file:
+            reader = csv.reader(file)
+            next(reader)
+            for row in reader:
+                parsed_row = [self.parse_entry_csv(entry) for entry in row[1:]]
+                result.append(parsed_row)
+        return result
 
-    def load_parse_table(self, parse_table):
+    def load_parse_table(self, filepath):
+        parse_table = self.parse_table_from_csv(filepath)
         parse_table_dict = {}
         header = self.terminals + ["$"] + self.non_terminals
 
@@ -515,6 +585,56 @@ class RNGLRParser():
             state += 1
         return parse_table
 
+    def formattingGrammar(self, input_grammar):
+        """
+        Processes the input grammar into an internal representation for the parser.
+
+        This method reformats the provided input grammar into a format suitable 
+        for parsing and initializes the grammar rules, start symbol, non-terminals, 
+        and terminals. The first rule in the input grammar is augmented to create 
+        a new start rule.
+
+        Args:
+            input_grammar (dict): The input grammar represented as a dictionary 
+                where keys are non-terminals and values are lists of production rules.
+
+        Attributes Modified:
+            self.grammar (dict)
+            self.start (str)
+            self.non_terminals (list)
+            self.terminals (list)
+        """
+        # Process the input grammar into a dictionary with each rule have the format of
+        # key: rulenumber (int) 
+        # value: [lhs (str), rhs (list of symbol)]
+        count = 0
+        for key in input_grammar.keys():
+            # Augment the first rule
+            if count == 0:
+                self.start = f"{key}'"
+                self.grammar[0] = (self.start, [key])
+                count += 1
+
+            # Process each rule into the format above
+            for rule in input_grammar[key]:
+                if rule == ["epsilon"]:
+                    self.grammar[count] = (key, [])
+                else:
+                    self.grammar[count] = (key, rule)
+                count += 1
+
+        # Detecting terminals and non-terminals symbols if it was not given
+        if len(self.terminals) == 0 and len(self.non_terminals) == 0:
+            for key in self.grammar.keys():
+                lhs, rhs = self.grammar[key]
+                if lhs not in self.non_terminals:
+                    self.non_terminals.append(lhs)
+            for key in self.grammar.keys():
+                lhs, rhs = self.grammar[key]
+                for sym in rhs:
+                    if sym not in self.terminals and sym not in self.non_terminals:
+                        if sym != "epsilon":
+                            self.terminals.append(sym)
 
     def parse(self, input_string):
         """
@@ -574,75 +694,6 @@ class RNGLRParser():
 
         return self.sppf_root, self.result
     
-    def visualize_sppf(self, filename="sppf_graph"):
-        """
-        Visualizes the SPPF structure with Graphviz, showing:
-        - SPPF nodes (ovals) with their labels and start positions
-        - Packing nodes (rectangles) for ambiguous parses
-        - Connections between all node types
-        """
-        from graphviz import Digraph
-
-        dot = Digraph()
-        dot.attr(rankdir='LR')  # Left-to-right layout for parse trees
-        processed = set()
-
-        # Create nodes with different styles for SPPF vs Packing nodes
-        for node in self.sppf:
-            # print(node, str(id(node)))
-            node_id = str(id(node))
-            
-            # SPPF Node styling
-            print(node)
-            label = ', '.join(node.label) if node.label else 'ε'
-            if node.start_position is not None:
-                label += f'\nStart: {node.start_position}'
-            dot.node(node_id, label=label, shape='oval', style='filled', 
-                    fillcolor='#E0E0E0' if node.label != ('ε',) else '#FFE0B2')
-
-        # Create edges and handle packing nodes
-        packing_nodes = set()
-        for node in self.sppf:
-            print("***", node, node.children)
-            node_id = str(id(node))
-            for child in node.children:
-                if isinstance(child, SPPFNode):
-                    print(child, str(id(child)))
-
-                    # Direct SPPF node connection
-                    dot.edge(node_id, str(id(child)))
-                elif isinstance(child, PackingNode):
-                    # Packing node connection
-                    packing_id = f"pack_{id(child)}"
-                    if packing_id not in packing_nodes:
-                        dot.node(packing_id, label="PackingNode", shape='rectangle', 
-                                style='filled', fillcolor='#BBDEFB')
-                        packing_nodes.add(packing_id)
-                    
-                    # Connect parent to packing node
-                    dot.edge(node_id, packing_id)
-                    
-                    # Connect packing node to its children
-                    for edge_node in child.edges:
-                        print(edge_node, str(id(edge_node)))
-                        print(edge_node.children)
-
-                        dot.edge(packing_id, str(id(edge_node)))
-
-        # # Add legend
-        # with dot.subgraph(name='cluster_legend') as legend:
-        #     legend.attr(label='Legend', style='dashed')
-        #     legend.node('legend_spff', 'SPPF Node\n(label, start pos)', shape='oval', 
-        #             fillcolor='#E0E0E0', style='filled')
-        #     legend.node('legend_pack', 'Ambiguity Point', shape='rectangle',
-        #             fillcolor='#BBDEFB', style='filled')
-        #     legend.node('legend_eps', 'ε Node', shape='oval', 
-        #             fillcolor='#FFE0B2', style='filled')
-        #     legend.attr(rank='same')
-
-        # Render and save
-        dot.render(filename, format='png', cleanup=True)
-        print(f"SPPF visualization saved to {filename}.png")
 
     def reducer(self, i):
         v, X, m, f, y = self.R[i].pop(0)
@@ -1296,9 +1347,13 @@ format_parsetree = display_tree
 # start = "S"
 # Test the Parser
 # t = RNParseTableConstructer(grammar, start)
-# parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
-
-# input_string = list("a")
+# export_filepath = "tables/test.csv"
+# t.export_to_csv(export_filepath)
+# # print(t.parse_table)
+# # t.printResultAndGoto()
+# parser = RNGLRParser(start, export_filepath, grammar)
+# print(parser.parse_table_from_csv("tables/test.csv"))
+# input_string = list("a+a*a")
 
 # root_node, res = parser.parse(input_string)
 # print("Correct String:", res)
@@ -1306,8 +1361,9 @@ format_parsetree = display_tree
 # ee = EnhancedExtractor(root_node)
 # while True:
 #     t = ee.extract_a_tree()
+#     import simplefuzzer as fuzzer
 #     if t is None: break
-#     format_parsetree(t)
+#     assert fuzzer.tree_to_string(t) == "".join(input_string)
 
 # a, b  = generate_trees(root)
 # print(a, b)
@@ -1322,7 +1378,6 @@ format_parsetree = display_tree
 
 
 
-# import simplefuzzer as fuzzer
 
 # def parents(g):
 #     parent = {}
