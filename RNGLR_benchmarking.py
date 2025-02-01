@@ -8,11 +8,25 @@ import final_parser.CYK as cyk
 import final_parser.GLL as gll
 import final_parser.Valiant as valiant
 
+
 import time
 import random
 import tracemalloc
 from collections import defaultdict
 import traceback
+import sys
+import csv 
+import os
+maxInt = sys.maxsize
+
+while True:
+    # decrease the maxInt value by factor 10 
+    # as long as the OverflowError occurs.
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
 
 
@@ -34,86 +48,86 @@ def benchmark(parsers, grammar, start, test_cases, export_path):
                 rnglr_parser = rnglr.RNGLRParser(start, export_path, grammar)
             
             
-            # try:
-            if name == "GLL":
-                start_time = time.perf_counter()
-                tracemalloc.start()
+            try:
+                if name == "GLL":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                gll_result = gll_parser.recognize_on(test_str, start)
-                ee = gll.EnhancedExtractor(gll_result)
-                while True:
-                    t = ee.extract_a_tree()
-                    if t is None: break
+                    gll_result = gll_parser.recognize_on(test_str, start)
+                    ee = gll.EnhancedExtractor(gll_result)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-            elif name == "Valiant":
-                start_time = time.perf_counter()
-                tracemalloc.start()
+                elif name == "Valiant":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                v = valiant_parser.parse_on(test_str, start)
-                for t in v:
-                    pass
+                    v = valiant_parser.parse_on(test_str, start)
+                    for t in v:
+                        pass
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-            elif name == "CYK":
-                start_time = time.perf_counter()
-                tracemalloc.start()
+                elif name == "CYK":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                cyk_result = cyk_parser.parse_on(test_str, start)
-                for t in cyk_result:
-                    pass
+                    cyk_result = cyk_parser.parse_on(test_str, start)
+                    for t in cyk_result:
+                        pass
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-            elif name == "Earley":
-                start_time = time.perf_counter()
-                tracemalloc.start()
+                elif name == "Earley":
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                ee = earley.EnhancedExtractor(earley_parser, test_str, start)
-                while True:
-                    t = ee.extract_a_tree()
-                    if t is None: break
+                    ee = earley.EnhancedExtractor(earley_parser, test_str, start)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-            elif name == "RNGLR":
-                # import cProfile
-                # profiler = cProfile.Profile()
-                # profiler.enable()
-                start_time = time.perf_counter()
-                tracemalloc.start()
+                elif name == "RNGLR":
+                    # import cProfile
+                    # profiler = cProfile.Profile()
+                    # profiler.enable()
+                    start_time = time.perf_counter()
+                    tracemalloc.start()
 
-                rnglr_root, res = rnglr_parser.parse(list(test_str))
-                ee = rnglr.EnhancedExtractor(rnglr_root)
-                while True:
-                    t = ee.extract_a_tree()
-                    if t is None: break
+                    rnglr_root, res = rnglr_parser.parse(list(test_str))
+                    ee = rnglr.EnhancedExtractor(rnglr_root)
+                    while True:
+                        t = ee.extract_a_tree()
+                        if t is None: break
 
-                parse_time = time.perf_counter() - start_time
-                memory_peak = tracemalloc.get_traced_memory()[1]
-                tracemalloc.stop()
+                    parse_time = time.perf_counter() - start_time
+                    memory_peak = tracemalloc.get_traced_memory()[1]
+                    tracemalloc.stop()
 
-                # profiler.disable()
-                # profiler.print_stats(sort="time")
+                    # profiler.disable()
+                    # profiler.print_stats(sort="time")
 
 
-            results[name]['length'].append(len(test_str))
-            results[name]['time'].append(parse_time)
-            results[name]['memory'].append(memory_peak)
+                results[name]['length'].append(len(test_str))
+                results[name]['time'].append(parse_time)
+                results[name]['memory'].append(memory_peak)
                 
 
-            # except Exception as e:
-            #     traceback.print_exc()
+            except Exception as e:
+                traceback.print_exc()
     return results
 
 # Example grammar
@@ -269,9 +283,26 @@ def print_grammar(grammar, start, property):
 
 
 def print_results_table(results):
-    print("\n{:<10} {:<15} {:<15} {:<15} {:<15} {:<15}".format(
-         "Parser", "Avg Length", "Avg Time(s)", "Min Time(s)", "Max Time(s)", "Avg Memory(MB)"))
-    print("-" * 85)
+    # print("\n{:<10} {:<15} {:<15} {:<15} {:<15} {:<15}".format(
+    #      "Parser", "Avg Length", "Avg Time(s)", "Min Time(s)", "Max Time(s)", "Avg Memory(MB)"))
+    # print("-" * 85)
+
+    # for parser_name, stats in results.items():
+    #     if not stats['time']:  # If no successful results, skip
+    #         continue
+        
+    #     avg_len = sum(stats['length']) / len(stats['length'])
+    #     avg_time = sum(stats['time']) / len(stats['time'])
+    #     min_time = min(stats['time'])
+    #     max_time = max(stats['time'])
+    #     avg_memory = sum(stats['memory']) / len(stats['memory']) / (1024 * 1024)
+
+    #     print("{:<10} {:<15.1f} {:<15.4f} {:<15.4f} {:<15.4f} {:<15.2f}".format(
+    #         parser_name, avg_len, avg_time, min_time, max_time, avg_memory))
+        
+    print("\n{:<10} {:<15} {:<15} {:<10}".format(
+         "Parser", "Input Length", "Time(s)", "Avg Memory(MB)"))
+    print("-" * 60)
 
     for parser_name, stats in results.items():
         if not stats['time']:  # If no successful results, skip
@@ -283,8 +314,8 @@ def print_results_table(results):
         max_time = max(stats['time'])
         avg_memory = sum(stats['memory']) / len(stats['memory']) / (1024 * 1024)
 
-        print("{:<10} {:<15.1f} {:<15.4f} {:<15.4f} {:<15.4f} {:<15.2f}".format(
-            parser_name, avg_len, avg_time, min_time, max_time, avg_memory))
+        print("{:<10} {:<15.0f} {:<15.4f} {:<10.4f}".format(
+            parser_name, avg_len, avg_time, avg_memory))
         
 
 def export_to_csv(results, filename="benchmark_results.csv"):
@@ -355,11 +386,31 @@ def test0():
         # 'Valiant',
         # 'CYK',
         # 'GLL',
-        # 'Earley',
+        'Earley',
         'RNGLR'
     }
 
     test_cases = []
+    # json_test1 = """
+    # {
+    #     "name": "Alice",
+    #     "age": 25,
+    #     "address": {
+    #         "street": "123 Main St",
+    #         "city": "Wonderland",
+    #         "zip": "12345"
+    #     },
+    #     "phones": ["+1234567890", "+0987654321"],
+    #     "preferences": {
+    #         "notifications": "false",
+    #         "theme": "dark"
+    #     },
+    #     "history": [
+    #         {"date": "2024-01-01", "action": "login"},
+    #         {"date": "2024-01-02", "action": "purchase"}
+    #     ]
+    # }
+    # """
     json_test1 = """
     {
         "name": "Alice",
@@ -369,13 +420,15 @@ def test0():
             "city": "Wonderland",
             "zip": "12345"
         }
-        ]
     }
     """
     # print(remove_whitespace(json_test1))
-    test_cases.append(remove_whitespace(json_test1))
+    test_cases.append("".join(remove_whitespace(json_test1)))
 
-    results = benchmark(parsers, grammar, start, test_cases)
+    # rntable = rnglr.RNParseTableConstructer(grammar, start)
+    export_path = "tables/benchmark1.csv"
+    # rntable.export_to_csv(export_path)
+    results = benchmark(parsers, grammar, start, test_cases, export_path)
 
     print_grammar(grammar, start, property)
     print_results_table(results)
@@ -399,8 +452,8 @@ def test1():
     property = "Normal Grammar"
 
     parsers = {
-        'Valiant',
-        'CYK',
+        # 'Valiant',
+        # 'CYK',
         'GLL',
         'Earley',
         'RNGLR'
@@ -426,7 +479,7 @@ def test1():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark2.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
 
@@ -472,7 +525,7 @@ def test2():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark3.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
     print_grammar(grammar, start, property)
@@ -516,7 +569,7 @@ def test3():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark4.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
 
@@ -559,7 +612,7 @@ def test4():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark5.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
 
@@ -602,7 +655,7 @@ def test5():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark6.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
 
@@ -618,7 +671,7 @@ def test6():
     property = "Right Recursive Grammar"
 
     parsers = {
-        'Valiant',
+        # 'Valiant',
         # 'CYK',
         'GLL',
         'Earley',
@@ -645,15 +698,15 @@ def test6():
             test_cases.append((s))
 
     rntable = rnglr.RNParseTableConstructer(grammar, start)
-    export_path = "tables/benchmark1.csv"
+    export_path = "tables/benchmark7.csv"
     rntable.export_to_csv(export_path)
     results = benchmark(parsers, grammar, start, test_cases, export_path)
-    
+
     print_grammar(grammar, start, property)
     print_results_table(results)
 
 
-# test0()
+test0()
 test1()
 test2()
 test3()
