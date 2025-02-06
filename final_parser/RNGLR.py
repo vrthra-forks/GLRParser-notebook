@@ -14,10 +14,11 @@ profiler.enable()
 class RNParseTableConstructer:
     def __init__(self, input_grammar, start):
         """
-        Initialize the LRParser with a given grammar.
+        Setting up the parameters for the construction of RN parse table
 
         Args:
             input_grammar (dict): A dictionary defining the context-free grammar (CFG).
+            start (str): The start symbol of the grammar.
         """
         # Initialize parameters of the CFG
         self.grammar = {}
@@ -25,24 +26,25 @@ class RNParseTableConstructer:
         self.terminals = []
         self.non_terminals = []
         self.dot = "·"
-        self.formattingGrammar(input_grammar)
 
-        self.epsilon_sppf = build_epsilon_sppf(input_grammar)
-        self.gss = GSS()
-
+        self.format_grammar(input_grammar)
+        self.epsilon_sppf = build_epsilon_sppf(input_grammar)  # Builds epsilon SPPF of the grammar 
+        self.gss = GSS()  # Graph-structured stack
+        
         self.first_table = {}
-        self.in_progress = set()     # this variable is used to avoid left recursive when calculating first
-        self.calculateFirstTable()
+        self.in_progress = set()  # Used to avoid left recursion when calculating FIRST sets
+        self.calculate_first_table()
         
         self.augmented_rules = []  # Format: [(lhs, [rhs], lookahead)]
-        self.state_dict = {}       # States: (format: state_count: [[rule1], [rule2], ...])
-        self.state_map= {}         # Transitions: {(state, symbol): new_state}
+        self.state_dict = {}  # Rules in each state. Format - {state_count: [[rule1], [rule2], ...]}
+        self.state_map = {}  # Transition between states. Format - {(state, symbol): new_state}
         self.state_count = 0
-        self.addDot()
-        self.generateStates()
-
+        
+        self.add_dot()
+        self.generate_states()
+        
         self.parse_table = []
-        self.createParseTable()
+        self.create_parse_table()
 
 
     def formattingGrammar(self, input_grammar):
@@ -55,14 +57,8 @@ class RNParseTableConstructer:
         a new start rule.
 
         Args:
-            input_grammar (dict): The input grammar represented as a dictionary 
-                where keys are non-terminals and values are lists of production rules.
+            input_grammar (dict): A dictionary defining the context-free grammar (CFG).
 
-        Attributes Modified:
-            self.grammar (dict)
-            self.start (str)
-            self.non_terminals (list)
-            self.terminals (list)
         """
         # Process the input grammar into a dictionary with each rule have the format of
         # key: rulenumber (int) 
@@ -188,8 +184,9 @@ class RNParseTableConstructer:
                 new_rhs[dot_ind], new_rhs[dot_ind + 1] = new_rhs[dot_ind + 1], new_rhs[dot_ind]
                 new_state.append((lhs, new_rhs, lookahead))
 
-
+        # calculate the closure of that state
         closure_rules = self.findClosure(copy.copy(new_state))
+        # add lookahead accordingly to each rule in that state
         complete_state = self.add_lookahead(new_state, closure_rules)
 
 
@@ -212,6 +209,12 @@ class RNParseTableConstructer:
 
 
     def first_str(self, string):
+        """
+        Compute the FIRST set of a given string.
+
+        Args:
+            string (str): The given string
+        """
         res = set()
         for char in string:
             if char in self.terminals or char == "$":
@@ -219,6 +222,9 @@ class RNParseTableConstructer:
             else:
                 first_set = self.first_table[char]
             res |= first_set
+
+            # if the current symbol's first set is nullable, then the first set of the string
+            # need to include the first set of the next symbol
             if "epsilon" not in first_set:
                 break
 
@@ -228,6 +234,12 @@ class RNParseTableConstructer:
             
     
     def first(self, sym):
+        """
+        Compute the FIRST set of a given symbol.
+
+        Args:
+            sym (str): The given symbol
+        """
         # rule for terminals
         if sym in self.terminals or sym == "$":
             return set([sym])
@@ -241,9 +253,9 @@ class RNParseTableConstructer:
         else:
             if sym in self.in_progress:
                 return set()  # prevent infinite recursion
+            
             # mark this non-terminal as being processed
             self.in_progress.add(sym)
-
 
             res = set()
             for key in self.grammar.keys():
@@ -264,6 +276,12 @@ class RNParseTableConstructer:
             
 
     def findClosure(self, closure_rules):
+        """
+        Compute the closure set of set of rules.
+
+        Args:
+            closure_rules (str): The given set of rules.
+        """
         original_state = copy.copy(closure_rules)
 
         follow = {}
@@ -290,6 +308,7 @@ class RNParseTableConstructer:
                                 if augmented_rule in closure_rules:
                                     continue
                                 closure_rules.append(augmented_rule)
+
                             # if a new create item for the closure -> need to calculate new lookahead
                             else:
                                 new_nt = rhs[dot_ind+1]
@@ -308,13 +327,16 @@ class RNParseTableConstructer:
         return closure_rules
     
     def add_lookahead(self, orignal_state, closure_rules):
+        """
+        Add new valid lookahead symbol to the set of closure rules given.
+
+        Args:
+            closure_rules (str): The given set of rules.
+        """
         follow = {}
 
         for lhs, rhs, lookahead in closure_rules:
             follow[lhs] = set()
-
-
-
 
         for nt in self.non_terminals:
             for lhs, rhs, lookahead in closure_rules:
@@ -326,6 +348,8 @@ class RNParseTableConstructer:
                     if new_nt not in self.non_terminals:
                         continue
 
+
+                    # lookahead set is the follow set of the remainng part of the rule after the non_terminals after dot 
                     if dot_ind + 2 < len(rhs):
                         follow[new_nt] |= self.first_str(rhs[dot_ind+2:] + [lookahead])
 
@@ -335,18 +359,23 @@ class RNParseTableConstructer:
         
         complete_state = []
         for lhs, rhs, lookahead in closure_rules:
+            # if the closure rules exist in the original state - state before calculating closure
+            # then we don't need to add new lookahead
             if (lhs, rhs, lookahead) in orignal_state:
                 complete_state.append((lhs, rhs, lookahead))
+
+            # else we add new lookahead to the rule using the lookahead set calculated above
             else:
                 for new_lookahead in follow[lhs]:
                     if (lhs, rhs, new_lookahead) not in complete_state:
                         complete_state.append((lhs, rhs, new_lookahead))
+        
         return complete_state
     
 
     def createParseTable(self):
         """
-        Create the parsing table for the SLR(1) parser.
+        Finally, assemble the parsing RN table
         """
         rows = list(self.state_dict.keys())
         cols = self.terminals + ["$"] + self.non_terminals
@@ -413,81 +442,76 @@ class RNParseTableConstructer:
                                         f = function_I(self.epsilon_sppf, lhs, alpha, nullable_string)
                                         col_ind = cols.index(lookahead)
                                         if ("r", (lhs, len(alpha), f)) not in self.parse_table[row_ind][col_ind]:
-                                            # print(row_ind, lookahead, ("r", (lhs, len(alpha), f)))
                                             self.parse_table[row_ind][col_ind].append(("r", (lhs, len(alpha), f)))
                             break
 
-                    ### if the rest if the string is nullable -> add reduce
 
 
     	# printing table
-        # print("\nParsing table:\n")
-        # frmt = "{:>12}" * len(cols)
-        # print(" ", frmt.format(*cols), "\n")
-        # ptr = 0
-        # j = 0
-        # for y in self.parse_table:
-        #     # frmt1 = "{:>8}"
-        #     print(f"{{:>3}}".format('I'+str(j)), end="")
-        #     for e in y:
-        #         list_opp = []
-        #         for opp in e:
-        #             word = ""
-        #             word += opp[0]
-        #             if len(opp) > 0:
-        #                 if type(opp[1]) is int:
-        #                     word += str(opp[1])
-        #                 else:
-        #                     for s in opp[1]:
-        #                         word += str(s)
-        #             list_opp.append(word)
-        #         print(f"{{:>12}}".format("/".join(list_opp)), end="")
-        #     print()
-        #     j += 1
-
-        # print("-------------------------------------------------------------------")
-        # for y in self.parse_table:
-        #     for e in y:
-        #         if e:
-        #             print(e, end="  ")
-        # print("\n")
-
-    # def printResultAndGoto(self):
-    #     print("\nStates Generated:\n")
-    #     for st in self.state_dict:
-    #         print(f"State = I{st}")
-    #         self.printResult(self.state_dict[st])
-    #         print()
-
-    #     print("\nResult of GOTO computation:\n")
-    #     self.printAllGOTO(self.state_map)
+        print("\nParsing table:\n")
+        frmt = "{:>12}" * len(cols)
+        print(" ", frmt.format(*cols), "\n")
+        ptr = 0
+        j = 0
+        for y in self.parse_table:
+            # frmt1 = "{:>8}"
+            print(f"{{:>3}}".format('I'+str(j)), end="")
+            for e in y:
+                list_opp = []
+                for opp in e:
+                    word = ""
+                    word += opp[0]
+                    if len(opp) > 0:
+                        if type(opp[1]) is int:
+                            word += str(opp[1])
+                        else:
+                            for s in opp[1]:
+                                word += str(s)
+                    list_opp.append(word)
+                print(f"{{:>12}}".format("/".join(list_opp)), end="")
+            print()
+            j += 1
 
 
-    # def printResult(self, rules):
-    #     for rule in rules:
-    #         print(f"{rule[0]} -> {' '.join(rule[1])} , {rule[2]}")
+    def printResultAndGoto(self):
+        print("\nStates Generated:\n")
+        for st in self.state_dict:
+            print(f"State = I{st}")
+            self.printResult(self.state_dict[st])
+            print()
 
-    # def printAllGOTO(self, diction):
-    #     for itr in diction:
-    #         print(f"GOTO ( I{itr[0]} , {itr[1]} ) = I{self.state_map[itr]}")
+        print("\nResult of GOTO computation:\n")
+        self.printAllGOTO(self.state_map)
+
+
+    def printResult(self, rules):
+        for rule in rules:
+            print(f"{rule[0]} -> {' '.join(rule[1])} , {rule[2]}")
+
+    def printAllGOTO(self, diction):
+        for itr in diction:
+            print(f"GOTO ( I{itr[0]} , {itr[1]} ) = I{self.state_map[itr]}")
 
     def export_to_csv(self, filepath):
+        """
+        Export parsing table to csv file
+
+        Args:
+            filepath (string): path of the csv file that user want to write to
+
+        """
         rows = list(self.state_dict.keys())
         cols = self.terminals + ["$"] + self.non_terminals
 
+        # Create directories if they don't exist
         if not os.path.exists(os.path.dirname(filepath)):
-            os.makedirs(os.path.dirname(filepath))  # Create directories if they don't exist
+            os.makedirs(os.path.dirname(filepath)) 
 
         # saving the parse table to a csv file
         with open(filepath, "w") as file:
             file.write("state,"+",".join(cols)+"\n")
             j = 0
             for i, y in enumerate(self.parse_table):
-                # line = ""
-                # line += f"I{j}"
-                # for e in y:
-                #     line += "," + "/".join(e)
-                # file.write(line + "\n")
                 list_opp = [str(i)]
                 for e in y:
                     entry = ""
@@ -517,26 +541,29 @@ class RNParseTableConstructer:
 
 class RNGLRParser():
     def __init__(self, start, filepath, input_grammar, start_state=0, accept_state=1): 
+        # Initialize parameters of the CFG
         self.grammar = {}
         self.start = start
         self.terminals = []
         self.non_terminals = []
+
+
         self.formattingGrammar(input_grammar)
         self.symbols = self.terminals + ["$"] + self.non_terminals
 
         
         self.parse_table = self.load_parse_table(filepath)
-        self.epsilon_sppf = build_epsilon_sppf(input_grammar)
+        self.epsilon_sppf = build_epsilon_sppf(input_grammar)   # Builds epsilon SPPF of the grammar 
 
         self.start_state = start_state
         self.accept_state = accept_state
 
-        self.gss = GSS()
-        self.sppf = {}
+        self.gss = GSS() # Graph-structured stack
+        self.sppf = {}  # Share Packed Parse Forest   
         self.sppf_root = None
 
         self.U = {}
-        self.reverse_U = {}
+        self.reverse_U = {} # hash table to quickly find frontier in U of a node
         self.R = {}
         self.Q = []
         self.N = {}
@@ -563,16 +590,34 @@ class RNGLRParser():
             return entry  # Default case (header values, etc.)
         
     def parse_table_from_csv(self, filepath):
+        """
+        Read RN parse table from csv file and return it in list format
+
+        Args:
+            filepath (string): Filepath of the csv file
+
+        """
         result = [] 
         with open(filepath, 'r') as file:
-            reader = csv.reader(file)
-            next(reader)
-            for row in reader:
-                parsed_row = [self.parse_entry_csv(entry) for entry in row[1:]]
+            lines = file.read().splitlines()
+
+            for line in lines[1:]:  # Skip first row
+                row = line.split(",")  # Manually split by comma
+                parsed_row = [self.parse_entry_csv(entry) for entry in row[1:]]  # Skip first entry of each row
                 result.append(parsed_row)
+
         return result
 
     def load_parse_table(self, filepath):
+        """
+        Convert RN table in list format to dictionary format
+        Format: Key - (Current state, Next symbol)
+                Value - List of operations
+
+        Args:
+            filepath (string): Filepath of the csv file
+
+        """
         parse_table = self.parse_table_from_csv(filepath)
         parse_table_dict = {}
         header = self.terminals + ["$"] + self.non_terminals
@@ -597,12 +642,6 @@ class RNGLRParser():
         Args:
             input_grammar (dict): The input grammar represented as a dictionary 
                 where keys are non-terminals and values are lists of production rules.
-
-        Attributes Modified:
-            self.grammar (dict)
-            self.start (str)
-            self.non_terminals (list)
-            self.terminals (list)
         """
         # Process the input grammar into a dictionary with each rule have the format of
         # key: rulenumber (int) 
@@ -638,10 +677,8 @@ class RNGLRParser():
 
     def parse(self, input_string):
         """
-
+        Parse function (reference to pseudocode by Generalised LR parsing algorithms - Giorgios Robert Economopoulos)
         """
-        # if isinstance(input_string, str):
-        #     input_string = list(input_string)
         if len(input_string) == 0:
             operations = self.parse_table[self.start_state][self.symbols.index("$")]
             for operation in operations:
@@ -659,7 +696,6 @@ class RNGLRParser():
             self.Q = []
             self.a = input_string + ["$"]
 
-
             operations = self.parse_table[self.start_state][self.symbols.index(self.a[0])]
             for operation in operations:
                 if operation[0] == "p":
@@ -668,8 +704,8 @@ class RNGLRParser():
                     X, m, f = operation[1]
                     if m == 0:
                         self.R[0].append((v0, X, 0, f, self.epsilon_sppf[0]))  # self.epsilon_sppf[0] is epsilon node
-            
             for i in range(n+1):
+                
                 while True:
 
                     self.N = {}
@@ -679,45 +715,37 @@ class RNGLRParser():
 
                     if not self.R[i]:
                         break
-
             for u in self.U[n]:
                 if u.state == self.accept_state:
-                    # print("\n")
-                    # print(self.start, v0.state)   
-
-                    # for node in self.sppf.values():
-                    #     # print(node.label, node.start_position)
-                    #     if node.label == (self.start.strip("\'")) and node.start_position == v0.state:
-                    #         if node.root_candidate:
-                    self.sppf_root = self.sppf.get((self.start.strip("\'"), v0.state))
                     self.result = True
-
+                    self.sppf_root = self.sppf.get((self.start.strip("\'"), v0.state))
         return self.sppf_root, self.result
     
 
     def reducer(self, i):
+        """
+        Reducer function (reference to pseudocode by Generalised LR parsing algorithms - Giorgios Robert Economopoulos)
+        """
         v, X, m, f, y = self.R[i].pop(0)
 
+        # Case m = 0: nullable non-terminal
         if m == 0:
             all_path = self.gss.find_paths_link_length_m(v, 0)
-            # next_sym_ind = i
-
         else:
             all_path = self.gss.find_paths_link_length_m(v, m-1)
-            # next_sym_ind = i+1
 
-
-        if m != 0:
-            w_m = y
-
+        # for all possible path from v that have length = m - which is reducable
         for path_link in all_path:
+            # u is the last node of the path
             u = path_link[-1]
+
+            # list_w will be the list of the link connectin v to u
             list_w = []
             for link in reversed(path_link[:-1]):
                 list_w.append(link)
 
             if m != 0:
-                list_w.append(w_m)
+                list_w.append(y)
 
             k = u.state
             operations = self.parse_table[k][self.symbols.index(X)]
@@ -725,18 +753,14 @@ class RNGLRParser():
                 if operation[0] == "p":
                     l = int(operation[1])
 
+            # if nullable non-terminal, then simply add that non-terminal from epsilon sppf to the tree sppf
             if m == 0:
                 z = self.epsilon_sppf[f]
                 self.add_node_to_sppf(z)
 
+            # if not nullable non-terminal rule, then create new sppf node accordingly
             else:
-                z_exists = False
                 c = self.find_U_i_with_node(u)
-                # print("FINDING Z")
-                # for node in self.epsilon_sppf.values():
-                #     print(node.label, node.start_position)       
-
-
                 z = self.N.get((X, c))
 
                 if not z:
@@ -744,11 +768,8 @@ class RNGLRParser():
                     self.sppf[(X, c)] = z
                     self.N[(X, c)] = z
 
-            # if m == 0:
             w = self.find_node_in_U_i_with_label(i, l)
-            # else:
-            #     w = self.find_node_in_U_i_with_label(i+1, l)
-
+            # if w already exist in the Ui frontier then just need to add link
             if w:
                 if not self.exist_edge_from_w_to_u(w, u):
                     w.add_link(u, z)
@@ -760,13 +781,11 @@ class RNGLRParser():
                                 if t != 0:
                                     self.R[i].append((u, B, t, f_next, z))
 
+            # else w not exist in the Ui frontier then create new node and add link
             else:
                 w = self.gss.create_node(l)
-                # if m == 0:
                 self.U[i].append(w)
                 self.reverse_U[w.count] = i
-                # else:
-                #     self.U[i+1].append(w)
                 w.add_link(u, z)
 
                 operations = self.parse_table[l][self.symbols.index(self.a[i])]
@@ -793,8 +812,10 @@ class RNGLRParser():
 
     
     def shifter(self, i):
+        """
+        Shifter function (reference to pseudocode by Generalised LR parsing algorithms - Giorgios Robert Economopoulos)
+        """
         Q_prime = []
-
 
         z = self.sppf.get((self.a[i], i))
 
@@ -810,6 +831,7 @@ class RNGLRParser():
                 if node.state == k:
                     w = node
             
+            # if the node to be shifted exist, then just need to add new link to it
             if w:
                 w.add_link(v, z)
 
@@ -820,6 +842,7 @@ class RNGLRParser():
                         if t != 0:
                             self.R[i+1].append((v, B, t, f, z))
 
+            # if the node to be shifted doesn't exist, then create new node andadd new link to it
             else:
                 w = self.gss.create_node(k)
                 w.add_link(v, z)
@@ -845,12 +868,16 @@ class RNGLRParser():
 
 
     def add_children(self, y, list_w, f):
+        """
+        Add_chidlren function (reference to pseudocode by Generalised LR parsing algorithms - Giorgios Robert Economopoulos)
+        """
         if f == 0:
             A = list_w
         else:
             A = list_w
             A.append(self.epsilon_sppf[f])
 
+        # if y doesn't have any children then add them and mark them as unable to be root candidate and existed in sppf
         if not y.children:
             for v in A:
                 if v not in y.children:
@@ -860,6 +887,8 @@ class RNGLRParser():
                 if not self.sppf.get((v.label, v.start_position)):
                     self.sppf[(v.label, v.start_position)] = v
 
+        # if y has any children, check if the children sequence exist or not
+        # if not exist, then create a new PackingNode for the new sequence of children
         elif not y.check_exist_children_sequence(A):
             if not any(isinstance(child, PackingNode) for child in y.children):
                 z = PackingNode()
@@ -894,10 +923,7 @@ class RNGLRParser():
     
     def find_U_i_with_node(self, node):
         return self.reverse_U[node.count]
-        # for i in self.U.keys():
-        #     if node in self.U[i]:
-        #         return i
-            
+
     def add_node_to_sppf(self, new_node):
         node = self.sppf.get((new_node.label, new_node.start_position))
         if not node:
@@ -907,6 +933,11 @@ class RNGLRParser():
         return node
             
 class GSSNode:
+    '''
+    GSSNode, including the count of the node in the GSS Tree
+    Each node's successor is a tuple of the successor node, and the link between it
+    In this program, the link between nodes is an edge, represented by a SPPF Node
+    '''
     def __init__(self, state, label_count):
         self.count = label_count
         self.state = state  # Parser state
@@ -925,6 +956,9 @@ class GSSNode:
 
 
 class GSS:
+    '''
+    GSS Tree of multiple GSS node, storing the label count to uniquely identify each node when required
+    '''
     def __init__(self):
         self.label_count = 0
         self.nodes = {}  # Map v_number -> GSSNode
@@ -953,10 +987,13 @@ class GSS:
 
 
 class SPPFNode:
-    def __init__(self, label, start_position=None, end_position=None):
+    '''
+    SPPFNode include start position and its children
+    Node's children is a list of other SPPFNode
+    '''
+    def __init__(self, label, start_position=None,):
         self.label = label
         self.start_position = start_position
-        self.end_postion = end_position
         self.children = []
         self.root_candidate = True
 
@@ -1295,6 +1332,7 @@ def format_child(child, next_prefix, format_node, get_children, options,
 
 format_parsetree = display_tree
 
+
 # grammar = {
 #     "S": [["S", "S"], ["a"], ["epsilon"]]
 # }
@@ -1346,11 +1384,15 @@ format_parsetree = display_tree
 #             }
 # start = "S"
 # Test the Parser
-# t = RNParseTableConstructer(grammar, start)
-# export_filepath = "tables/test.csv"
-# t.export_to_csv(export_filepath)
-# # print(t.parse_table)
-# # t.printResultAndGoto()
+grammar = {
+    "S": [["S", "+", "S"], ["a"]]
+}
+start = "S"
+t = RNParseTableConstructer(grammar, start)
+export_filepath = "tables/test.csv"
+t.export_to_csv(export_filepath)
+# print(t.parse_table)
+t.printResultAndGoto()
 # parser = RNGLRParser(start, export_filepath, grammar)
 # print(parser.parse_table_from_csv("tables/test.csv"))
 # input_string = list("a+a*a")
@@ -1364,135 +1406,3 @@ format_parsetree = display_tree
 #     import simplefuzzer as fuzzer
 #     if t is None: break
 #     assert fuzzer.tree_to_string(t) == "".join(input_string)
-
-# a, b  = generate_trees(root)
-# print(a, b)
-# for tree in b:
-#     print(tree)
-#     format_parsetree(tree)
-
-
-
-# parser.visualize_sppf(filename="my_parse_tree")
-# t.printResultAndGoto()
-
-
-
-
-# def parents(g):
-#     parent = {}
-#     for k in g:
-#         for r in g[k]:
-#             for t in r:
-#                 if t not in g: continue
-#                 if t not in parent: parent[t] = set()
-#                 parent[t].add(k)
-#     return parent
-
-
-# def _k_paths(g, k, parent):
-#     if k == 1: return [[k] for k in g]
-#     _k_1_paths = _k_paths(g, k-1, parent)
-#     # attach parents to each of the _k_1_paths.
-#     new_paths = []
-#     for path in _k_1_paths:
-#         if path[0] not in parent: continue
-#         for p in parent[path[0]]:
-#             new_paths.append([p] + path)
-#     return new_paths
-
-
-# def k_paths(g, k):
-#     g_parents = parents(g)
-#     return _k_paths(g, k, g_parents)
-
-
-# def find_rule_containing_key(g, key, root):
-#     leaf = root[0]
-#     for rule in g[key]:
-#         r = []
-#         while rule:
-#             token, *rule = rule
-#             if leaf != token:
-#                 r.append((token, None))
-#             else:
-#                 return r + [root] + [(t, None) for t in rule]
-#     assert False
-
-
-# def path_to_tree(path_, g):
-#     leaf, *path = reversed(path_)
-#     root = (leaf, [])
-#     # take the lowest
-#     while path:
-#         leaf, *path = path
-#         if not path: return root
-#         rule = find_rule_containing_key(g, leaf, root)
-#         root = [leaf, rule]
-
-# def tree_fill_(g, pt, f):
-#     key, children = pt
-#     if not children:
-#         if key in g:
-#             return (key, [(f.fuzz(key), [])])
-#         else:
-#             return (key, [])
-#     else:
-#         return (key, [tree_fill_(g, c, f) for c in children])
-
-
-# def tree_fill(g, pt):
-#     rgf = fuzzer.LimitFuzzer(g)
-#     return tree_fill_(g, pt, rgf)
-
-
-# def collapse(t):
-#     key, children = t
-#     if not children:
-#         return key
-#     return ''.join([collapse(c) for c in children])
-
-# def display_tree(node, level=0, c='-'):
-#     key, children = node
-#     if children is None:
-#         print(' ' * 4 * level + c+'> ' + key)
-#     else:
-#         print(' ' * 4 * level + c+'> ' + key)
-#         for c in children:
-#             if isinstance(c, str):
-#                 print(' ' * 4 * (level+1) + c)
-#             else:
-#                 display_tree(c, level + 1, c='+')
-
-
-# # grammar = {
-# #     "<E>": [
-# #             ["<E>", "+", "<T>"],       # Rule 1: E → E + T
-# #             ["<T>"]                  # Rule 2: E → T
-# #             ],        
-# #     "<T>": [
-# #             ["<T>", "*", "<F>"],       # Rule 3: T → T * F
-# #             ["<F>"]                  # Rule 4: T → F
-# #             ],           
-# #     "<F>": [
-# #             ["(", "<E>", ")"],       # Rule 5: F → ( E )
-# #             ["a"]                  # Rule 6: F → a
-# #             ]
-# # }
-
-# # start = "<E>"
-
-# # t = RNParseTableConstructer(grammar, start)
-# # parser = RNGLRParser(t.grammar, t.non_terminals, t.terminals, t.start, t.parse_table, t.epsilon_sppf)
-
-# for path in k_paths(grammar, 20)[:10]:
-#     if path[0] in start: 
-#         tree = path_to_tree(path, grammar)
-#         for i in range(1):
-#             t = tree_fill(grammar, tree)
-#             s = collapse(t)
-#             print(s)
-#             parser.parse(list(s))
-
-# profiler.disable()
-# profiler.print_stats(sort="time")
