@@ -287,11 +287,35 @@ def balance_grammar(grammar):
             if l == 0:
                 new_g[k].append([])
             elif l == 1:
-                new_g[k].append([r[0], '<>'])
+                new_g[k].append([r[0]])
             elif l == 2:
                 new_g[k].append(r)
             else:
                 assert False
+    return new_g
+
+def remove_unit_rules(g):
+    new_g = {}
+
+    # for every non-terminal k
+    for k in g:
+        visited = set()
+        queue = [k]
+        new_g[k] = []
+
+        while len(queue) > 0:
+            top = queue.pop()
+            if top in visited:
+                continue
+            visited.add(top)
+
+            for production in g[top]:
+            # Is a unit rule
+                if len(production) == 1 and fuzzer.is_nonterminal(production[0]):
+                    queue.append(production[0])
+                else:
+                    new_g[k].append(production)
+
     return new_g
 
 # connecting everything together
@@ -300,8 +324,8 @@ def cfg_to_cnf(g):
     g1 = replace_terminal_symbols(g)
     g2 = decompose_grammar(g1)
     g3 = balance_grammar(g2)
-    g3['<>'] = [[]]
-    return g3
+    g4 = remove_unit_rules(g3)
+    return g4
 
 
 
