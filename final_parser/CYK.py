@@ -1,12 +1,10 @@
 import simplefuzzer as fuzzer
 import random
-from typing import NewType
 
-Grammar = NewType('Grammar', dict[str, list[list[str]]])
-Table = NewType('Table', list[list[dict]])
+
 
 class CYKRecognizer():
-    def __init__(self, grammar: Grammar):
+    def __init__(self, grammar):
         self.grammar = grammar
         self.productions = [(k,r) for k in grammar for r in grammar[k]]
         self.cell_width = 5 
@@ -27,7 +25,7 @@ class CYKRecognizer():
 
 
 class CYKRecognizer(CYKRecognizer):
-    def init_table(self, text: str, length: int):
+    def init_table(self, text, length):
         res = [[{} for i in range(length+1)] for j in range(length+1)]
         # this is just for demonstration of which lterals are invloved.
         # You can remove the loop
@@ -95,7 +93,7 @@ class CYKRecognizer(CYKRecognizer):
 
 
 class CYKRecognizer(CYKRecognizer):
-    def recognize_on(self, text: str, start_symbol: str):
+    def recognize_on(self, text, start_symbol):
         length = len(text)
         table = self.init_table(text, length)
         self.parse_1(text, length, table)
@@ -261,8 +259,8 @@ def decompose_rule(rule, prefix):
     return [t, k], d
 
 
-def decompose_grammar(grammar: Grammar):
-    new_g: Grammar = {}
+def decompose_grammar(grammar):
+    new_g = {}
     for k in grammar:
         new_g[k] = []
         for i,r in enumerate(grammar[k]):
@@ -276,7 +274,7 @@ def decompose_grammar(grammar: Grammar):
 def is_newterminal(k):
     return k[1] == '_'
 
-def balance_grammar(grammar: Grammar):
+def balance_grammar(grammar):
     new_g = {}
     for k in grammar:
         if is_newterminal(k):
@@ -289,51 +287,26 @@ def balance_grammar(grammar: Grammar):
             if l == 0:
                 new_g[k].append([])
             elif l == 1:
-                new_g[k].append([r[0]])
+                new_g[k].append([r[0], '<>'])
             elif l == 2:
                 new_g[k].append(r)
             else:
                 assert False
     return new_g
 
-# removing unit rules
-def remove_unit_rules(g: Grammar):
-    new_g: Grammar = {}
-    
-    # for every non-terminal k
-    for k in g:
-        visited = set()
-        queue = [k]
-        new_g[k] = []
-
-        while len(queue) > 0:
-            top = queue.pop()
-
-            if top in visited:
-                continue
-            visited.add(top)
-
-            for production in g[top]:
-                # Is a unit rule
-                if len(production) == 1 and fuzzer.is_nonterminal(production[0]):
-                    queue.append(production[0])
-                else:
-                    new_g[k].append(production)
-    return new_g
-
-
 # connecting everything together
-def cfg_to_cnf(g: Grammar):
+
+def cfg_to_cnf(g):
     g1 = replace_terminal_symbols(g)
     g2 = decompose_grammar(g1)
     g3 = balance_grammar(g2)
-    g4 = remove_unit_rules(g3)
-    return g4
+    g3['<>'] = [[]]
+    return g3
 
 
 
 class CYKParser(CYKRecognizer):
-    def __init__(self, grammar: Grammar):
+    def __init__(self, grammar):
         self.cell_width = 5 
         self.grammar = grammar
         self.productions = [(k,r) for k in grammar for r in grammar[k]]
@@ -344,7 +317,7 @@ class CYKParser(CYKRecognizer):
 
 
 class CYKParser(CYKParser):
-    def parse_1(self, text: str, length: int, table: Table):
+    def parse_1(self, text, length, table):
         for s in range(0,length):
             for (key, terminal) in self.terminal_productions:
                 if text[s] == terminal:
@@ -382,11 +355,10 @@ class CYKParser(CYKParser):
 
         return None
 
-    def parse_on(self, text: str, start_symbol: str):
+    def parse_on(self, text, start_symbol):
         length = len(text)
         table = self.init_table(text, length)
         self.parse_1(text, length, table)
-        self.print_table(table)
         for n in range(2,length+1):
             self.parse_n(text, n, length, table)
         return [self.trees(table[0][-1][start_symbol])]

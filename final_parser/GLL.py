@@ -1181,9 +1181,6 @@ if __name__ == '__main__':
 
 # ### Compiling a Terminal Symbol
 def compile_terminal(g, key, n_alt, r_pos, r_len, token):
-    if (token == '\''):
-        token = "\\'"
-    # print("===========" + token)
     if r_len == r_pos:
         Lnxt = '"L_"'
     else:
