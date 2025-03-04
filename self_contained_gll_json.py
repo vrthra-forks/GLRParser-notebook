@@ -1,4 +1,4 @@
-import gllparser as gll
+import final_parser.GLL as gll
 
 def test0():
     def remove_whitespace(json_str):

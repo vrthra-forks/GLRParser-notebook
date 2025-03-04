@@ -1,4 +1,5 @@
 import final_parser.CYK as cyk
+from final_parser.CYK import cfg_to_cnf
 
 def test2():
     grammar = {
@@ -8,9 +9,10 @@ def test2():
     }
     start = "<E>"
     s = "a+a*a"
-    cyk_parser = cyk.CYKParser(grammar)
+    
+    cyk_parser = cyk.CYKParser(cfg_to_cnf(grammar))
     cyk_result = cyk_parser.parse_on(s, start)
     for t in cyk_result:
-        pass
+        print(t)
 
 test2()
