@@ -289,7 +289,7 @@ def balance_grammar(grammar):
             if l == 0:
                 new_g[k].append([])
             elif l == 1:
-                new_g[k].append([r[0]])
+                new_g[k].append([r[0], '<>'])
             elif l == 2:
                 new_g[k].append(r)
             else:
@@ -312,12 +312,88 @@ def remove_unit_rules(g: Grammar):
             visited.add(top)
 
             for production in g[top]:
-            # Is a unit rule
+                # Is a unit rule
                 if len(production) == 1 and fuzzer.is_nonterminal(production[0]):
                     queue.append(production[0])
                 else:
                     new_g[k].append(production)
 
+    return new_g
+
+# This will remove all the epsilon rules
+# Make sure that every rule has either 0 symbol or 2 symbols (A -> [] and A -> BC)
+def eliminate_epsilon(g: Grammar):
+    nullable_set = set()
+
+    # Get nullable set
+    changed = True
+    while (changed):
+        changed = False
+        for nt in g:    
+            for production in g[nt]:
+                # Epsilon rule nt -> []
+                if (len(production) == 0):
+                    if nt not in nullable_set:
+                        nullable_set.update({nt})
+                        changed = True
+                else:
+                    nullable = True
+                    # If every symbol is nullable
+                    for product in production:
+                        if product not in nullable_set:
+                            nullable = False
+                    # Then <nt> is also nullable
+                    if nullable:
+                        if nt not in nullable_set:
+                            nullable_set.update({nt})
+                            changed = True
+    
+    # With the nullable set, now replace
+    new_g: Grammar = {}
+    for nt in g:
+        new_g[nt] = []
+        for production in g[nt]:
+            # epsilon rule, ignore
+            if len(production) == 0:
+                continue
+            # terminal rule
+            if len(production) == 1:
+                new_g[nt].append(production)
+            
+            # non-terminal rule
+            if len(production) == 2:
+                A, B = production[0], production[1]
+                null_a = A in nullable_set
+                null_b = B in nullable_set
+
+                new_g[nt].append([A, B])
+                if (null_a):
+                    new_g[nt].append([B])
+                if (null_b):
+                    new_g[nt].append([A])
+    
+    g = new_g
+    new_g = {}
+    # Check empty RHS
+    for nt in g:
+        if len(g[nt]) == 0:
+            for k in g:
+                for production in g[k]:
+                    if nt in production:
+                        production.remove(nt)
+    
+    # Ensure no duplicate productions
+    for nt in g:
+        unique_productions = []
+        seen = set()
+        for prod in g[nt]:
+            prod_tuple = tuple(prod)
+            if prod_tuple not in seen and len(prod) > 0:
+                seen.add(prod_tuple)
+                unique_productions.append(prod)
+        if len(unique_productions) > 0:
+            new_g[nt] = unique_productions
+    
     return new_g
 
 # connecting everything together
@@ -326,9 +402,17 @@ def cfg_to_cnf(g: Grammar):
     g1 = replace_terminal_symbols(g)
     g2 = decompose_grammar(g1)
     g3 = balance_grammar(g2)
-    g4 = remove_unit_rules(g3)
-    return g4
+    g3['<>'] = [[]]
+    return g3
 
+def cfg_to_cnf_v2(g: Grammar):
+    g1 = replace_terminal_symbols(g)
+    g2 = decompose_grammar(g1)
+    g3 = balance_grammar(g2)
+    g3['<>'] = [[]]
+    g4 = eliminate_epsilon(g3)
+    g5 = remove_unit_rules(g4)
+    return g5
 
 
 class CYKParser(CYKRecognizer):
