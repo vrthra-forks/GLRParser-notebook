@@ -1,10 +1,12 @@
 import simplefuzzer as fuzzer
 import random
+from typing import NewType
 
-
+Grammar = NewType('Grammar', dict[str, list[list[str]]])
+Table = NewType('Table', list[list[dict]])
 
 class CYKRecognizer():
-    def __init__(self, grammar):
+    def __init__(self, grammar: Grammar):
         self.grammar = grammar
         self.productions = [(k,r) for k in grammar for r in grammar[k]]
         self.cell_width = 5 
@@ -25,7 +27,7 @@ class CYKRecognizer():
 
 
 class CYKRecognizer(CYKRecognizer):
-    def init_table(self, text, length):
+    def init_table(self, text, length) -> Table:
         res = [[{} for i in range(length+1)] for j in range(length+1)]
         # this is just for demonstration of which lterals are invloved.
         # You can remove the loop
@@ -294,7 +296,7 @@ def balance_grammar(grammar):
                 assert False
     return new_g
 
-def remove_unit_rules(g):
+def remove_unit_rules(g: Grammar):
     new_g = {}
 
     # for every non-terminal k
@@ -320,7 +322,7 @@ def remove_unit_rules(g):
 
 # connecting everything together
 
-def cfg_to_cnf(g):
+def cfg_to_cnf(g: Grammar):
     g1 = replace_terminal_symbols(g)
     g2 = decompose_grammar(g1)
     g3 = balance_grammar(g2)
@@ -330,7 +332,7 @@ def cfg_to_cnf(g):
 
 
 class CYKParser(CYKRecognizer):
-    def __init__(self, grammar):
+    def __init__(self, grammar: Grammar):
         self.cell_width = 5 
         self.grammar = grammar
         self.productions = [(k,r) for k in grammar for r in grammar[k]]
@@ -379,7 +381,7 @@ class CYKParser(CYKParser):
 
         return None
 
-    def parse_on(self, text, start_symbol):
+    def parse_on(self, text: str, start_symbol: str):
         length = len(text)
         table = self.init_table(text, length)
         self.parse_1(text, length, table)
