@@ -1,4 +1,6 @@
-import gllparser as gll
+import final_parser.GLL as gll
+import simplefuzzer as fuzzer
+import earleyparser as ep
 
 def test0():
     def remove_whitespace(json_str):
@@ -52,13 +54,12 @@ def test0():
     }
     """
     test_str = ("".join(remove_whitespace(json_test1)))
-
+    print(test_str)
     gll_parser = gll.compile_grammar(grammar)
-    gll_result = gll_parser.recognize_on(test_str, start)
-    print("Output of gll_parser.recognize_on():", gll_result)
-    ee = gll.EnhancedExtractor(gll_result)
-    while True:
-        t = ee.extract_a_tree()
-        if t is None: break 
+    gll_result = gll_parser.parse_on(test_str, start)[0]
+    
+    r = fuzzer.tree_to_string(gll_result)
+    ep.display_tree(gll_result)
+    print(r)
         
 test0()
